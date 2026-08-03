@@ -1,0 +1,11 @@
+{
+  "xgb_mae":0.3182,
+  "xgb_rmse":0.4336,
+  "noct_roof_mae":5.2496,
+  "noct_roof_rmse":6.221,
+  "noct_ambient_mae":15.2943,
+  "mae_improvement_pct":93.94,
+  "rmse_improvement_pct":93.03,
+  "n_train":3304.0,
+  "n_test":827.0
+}
