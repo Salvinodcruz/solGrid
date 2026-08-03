@@ -1,0 +1,12 @@
+requests
+pandas
+numpy
+scikit-learn
+xgboost
+prophet
+plotly
+flask
+flask-cors
+jupyter
+joblib
+python-dotenv
