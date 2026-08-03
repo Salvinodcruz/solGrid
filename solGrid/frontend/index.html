@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SolGrid Thermal Sync | FortyGuard 2026</title>
+
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+
+  <!-- Mapbox GL JS & CSS -->
+  <link href="https://api.mapbox.com/mapbox-gl-js/v3.4.0/mapbox-gl.css" rel="stylesheet" />
+  <script src="https://api.mapbox.com/mapbox-gl-js/v3.4.0/mapbox-gl.js"></script>
+
+  <!-- Plotly JS -->
+  <script src="https://cdn.plot.ly/plotly-2.32.0.min.js"></script>
+
+  <!-- Application CSS -->
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <!-- Top Navbar -->
+  <header class="navbar">
+    <div class="navbar-left">
+      <div class="logo-icon">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <circle cx="12" cy="12" r="5" fill="#f97316"/>
+          <path d="M12 2V4M12 20V22M2 12H4M20 12H22M4.93 4.93L6.34 6.34M17.66 17.66L19.07 19.07M4.93 19.07L6.34 17.66M17.66 6.34L19.07 4.93" stroke="#f97316" stroke-width="2.5" stroke-linecap="round"/>
+        </svg>
+      </div>
+      <span class="logo-text">SolGrid <span class="logo-sub">Thermal Sync</span></span>
+    </div>
+    <div class="navbar-right">
+      <span class="badge-tag">SonShield | FortyGuard 2026</span>
+    </div>
+  </header>
+
+  <!-- Main Container -->
+  <main class="dashboard-layout">
+    <!-- Left Panel: Mapbox Map (40% width) -->
+    <section class="map-panel">
+      <div id="map"></div>
+      <div class="map-overlay-legend">
+        <div class="legend-title">Thermal Risk Level</div>
+        <div class="legend-items">
+          <div class="legend-item"><span class="dot red"></span> > 80 High Risk</div>
+          <div class="legend-item"><span class="dot amber"></span> 60 - 80 Moderate</div>
+          <div class="legend-item"><span class="dot green"></span> &lt; 60 Optimal</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Right Panel: Stacked Cards (60% width) -->
+    <section class="controls-panel">
+      
+      <!-- 1. Building Info Card -->
+      <article class="card building-card" id="building-card">
+        <div class="card-header">
+          <div>
+            <span class="card-subtitle">SELECTED ASSET</span>
+            <h2 id="building-name" class="card-title">Select a building on the map</h2>
+          </div>
+          <div id="risk-score-badge" class="badge risk-badge high">Risk: --</div>
+        </div>
+        <div class="building-details-grid">
+          <div class="detail-item">
+            <span class="detail-label">Asset ID</span>
+            <span id="detail-building-id" class="detail-value">--</span>
+          </div>
+          <div class="detail-item">
+            <span class="detail-label">Rated Capacity</span>
+            <span id="detail-capacity" class="detail-value">-- kW</span>
+          </div>
+          <div class="detail-item">
+            <span class="detail-label">Roof Surface Temp</span>
+            <span id="detail-roof-temp" class="detail-value">-- °C</span>
+          </div>
+          <div class="detail-item">
+            <span class="detail-label">Surface Albedo</span>
+            <span id="detail-albedo" class="detail-value">--</span>
+          </div>
+        </div>
+      </article>
+
+      <!-- 2. Thermal Loss Card -->
+      <article class="card loss-card">
+        <div class="card-header">
+          <span class="card-subtitle">THERMAL DEGRADATION & REVENUE IMPACT</span>
+        </div>
+        <div class="loss-metrics-row">
+          <div class="big-loss-metric">
+            <span class="metric-label">Estimated Monthly Loss</span>
+            <div class="big-number red-text" id="monthly-loss-display">$0</div>
+            <span class="metric-subtext">Direct revenue leakage due to heat penalty</span>
+          </div>
+          <div class="secondary-loss-metrics">
+            <div class="stat-box">
+              <span class="stat-label">Efficiency Loss</span>
+              <span id="efficiency-loss-display" class="stat-value danger-text">0.00%</span>
+            </div>
+            <div class="stat-box">
+              <span class="stat-label">PV Cell Temp (NOCT)</span>
+              <span id="panel-temp-display" class="stat-value">0.0°C</span>
+            </div>
+          </div>
+        </div>
+      </article>
+
+      <!-- 3. What-If Simulator -->
+      <article class="card simulator-card">
+        <div class="card-header">
+          <div>
+            <h3 class="card-title">What-If Thermal Mitigation Simulator</h3>
+            <p class="card-description">Adjust cooling interventions to recalculate live efficiency recovery</p>
+          </div>
+        </div>
+
+        <div class="sliders-container">
+          <!-- Slider 1 -->
+          <div class="slider-group">
+            <div class="slider-header">
+              <label for="slider-albedo">Roof Albedo Coating</label>
+              <span id="val-albedo" class="slider-value">0.15</span>
+            </div>
+            <input type="range" id="slider-albedo" min="0.15" max="0.85" step="0.01" value="0.15">
+            <span class="slider-hint">Increases solar reflectance (0.15 standard dark roof to 0.85 ultra-white)</span>
+          </div>
+
+          <!-- Slider 2 -->
+          <div class="slider-group">
+            <div class="slider-header">
+              <label for="slider-misting">Misting Intensity</label>
+              <span id="val-misting" class="slider-value">0.0</span>
+            </div>
+            <input type="range" id="slider-misting" min="0.0" max="1.0" step="0.05" value="0.0">
+            <span class="slider-hint">Evaporative spray intensity (0.0 off to 1.0 peak misting)</span>
+          </div>
+
+          <!-- Slider 3 -->
+          <div class="slider-group">
+            <div class="slider-header">
+              <label for="slider-vent">Forced Ventilation</label>
+              <span id="val-vent" class="slider-value">0.0 m/s</span>
+            </div>
+            <input type="range" id="slider-vent" min="0.0" max="3.0" step="0.1" value="0.0">
+            <span class="slider-hint">Additional airflow velocity underneath PV modules (0 to 3.0 m/s)</span>
+          </div>
+        </div>
+
+        <!-- Simulation Results Banner -->
+        <div class="sim-results-box">
+          <div class="sim-metric">
+            <span class="sim-label">New Cell Temperature</span>
+            <span id="sim-new-temp" class="sim-value">-- °C</span>
+            <span id="sim-temp-drop" class="sim-badge success-bg">-- °C drop</span>
+          </div>
+          <div class="sim-metric">
+            <span class="sim-label">Monthly Recovered USD</span>
+            <span id="sim-recovered-usd" class="sim-value success-text">$0 / mo</span>
+          </div>
+        </div>
+
+        <div class="payback-grid">
+          <div class="payback-item">
+            <span class="p-name">Albedo Coating ($15k)</span>
+            <span id="payback-albedo" class="p-value">-- mos</span>
+          </div>
+          <div class="payback-item">
+            <span class="p-name">Smart Misting ($12k)</span>
+            <span id="payback-misting" class="p-value">-- mos</span>
+          </div>
+          <div class="payback-item">
+            <span class="p-name">Forced Ventilation ($5k)</span>
+            <span id="payback-vent" class="p-value">-- mos</span>
+          </div>
+        </div>
+      </article>
+
+      <!-- 4. 7-Day Forecast Chart -->
+      <article class="card forecast-card">
+        <div class="card-header">
+          <h3 class="card-title">7-Day Efficiency Forecast — Phoenix AZ</h3>
+        </div>
+        <div id="forecast-chart" class="chart-container"></div>
+      </article>
+
+      <!-- 5. ROI Recommendations List -->
+      <article class="card roi-card">
+        <div class="card-header">
+          <div>
+            <h3 class="card-title">Portfolio ROI Capital Allocation</h3>
+            <p class="card-description">Optimal payback interventions ranked for $50,000 budget</p>
+          </div>
+          <div id="portfolio-budget-badge" class="badge info-badge">Budget: $50,000</div>
+        </div>
+        <div id="roi-list" class="roi-list-container">
+          <div class="loading-spinner">Loading capital allocation...</div>
+        </div>
+      </article>
+
+    </section>
+  </main>
+
+  <!-- Scripts -->
+  <script src="heatmap.js"></script>
+  <script src="dashboard.js"></script>
+</body>
+</html>
