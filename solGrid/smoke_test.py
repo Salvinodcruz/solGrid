@@ -18,7 +18,7 @@ DEMO = {
 
 PORTFOLIO = {
     "buildings": [
-        {"building_id": "B001", "label": "1234 N Central Ave", "t_roof": 64.0, "ghi": 950, "wind_speed": 0.5, "albedo": 0.10, "rated_kw": 500},
+        {"building_id": "B001", "label": "1234 N Central Ave", "t_roof": 64.0, "ghi": 950, "wind_speed": 1.2, "albedo": 0.15, "rated_kw": 1000},
         {"building_id": "B002", "label": "88 W Jefferson St", "t_roof": 58.5, "ghi": 950, "wind_speed": 1.8, "albedo": 0.25, "rated_kw": 350},
         {"building_id": "B003", "label": "4501 E Camelback Rd", "t_roof": 52.0, "ghi": 950, "wind_speed": 2.6, "albedo": 0.45, "rated_kw": 250},
         {"building_id": "B004", "label": "770 S Mill Ave", "t_roof": 45.5, "ghi": 950, "wind_speed": 3.2, "albedo": 0.65, "rated_kw": 180},

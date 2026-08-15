@@ -90,7 +90,8 @@ class SolGridEngine:
             "wind_factor": round(wind_factor, 2),
             "t_cell": round(t_cell, 2),
             "temp_delta": round(temp_delta, 2),
-            "loss_pct": round(loss_pct, 2),
+            "loss_pct": round(loss_pct, 4),
+            "efficiency_loss_pct": round(loss_pct, 4),
             "expected_kwh": round(expected_kwh, 2),
             "lost_kwh": round(lost_kwh, 2),
             "hourly_dollar_loss": round(hourly_dollar_loss, 2),
@@ -101,9 +102,11 @@ class SolGridEngine:
     def simulate_intervention(self, t_roof, ghi, wind_speed, albedo, rated_kw,
                               new_albedo=None, misting_intensity=0.0, forced_wind=0.0):
         """Compare baseline thermal metrics against a stacked intervention scenario."""
+        print(f"[SolGridEngine] simulate_intervention received rated_kw: {rated_kw}")
         t_roof = float(t_roof)
         albedo = float(albedo)
         wind_speed = float(wind_speed)
+        rated_kw = float(rated_kw)
         misting_intensity = min(1.0, max(0.0, float(misting_intensity)))
         forced_wind = max(0.0, float(forced_wind))
 
@@ -145,7 +148,7 @@ class SolGridEngine:
             "forced_wind_added_ms": round(forced_wind, 2),
             "roof_temp_drop_c": round(t_roof - adj_t_roof, 2),
             "temp_drop_c": round(temp_drop_c, 2),
-            "loss_pct_reduction": round(before["loss_pct"] - after["loss_pct"], 2),
+            "loss_pct_reduction": round(before["loss_pct"] - after["loss_pct"], 4),
             "monthly_recovered_usd": round(monthly_recovered_usd, 2),
             "annual_recovered_usd": round(monthly_recovered_usd * 12, 2),
             "payback_months": payback_months,

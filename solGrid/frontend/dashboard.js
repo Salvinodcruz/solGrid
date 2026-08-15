@@ -13,9 +13,9 @@ const DEMO_BUILDINGS = [
     risk_score: 97,
     t_roof: 64.0,
     ghi: 950,
-    wind_speed: 0.5,
-    albedo: 0.10,
-    rated_kw: 500
+    wind_speed: 1.2,
+    albedo: 0.15,
+    rated_kw: 1000
   },
   {
     building_id: "B002",
@@ -108,7 +108,7 @@ function initMap() {
       container: 'map',
       style: 'mapbox://styles/mapbox/dark-v11',
       center: [-112.0740, 33.4484], // Phoenix (lng, lat)
-      zoom: 13
+      zoom: 12
     });
 
     // Handle token or map load errors gracefully
@@ -209,7 +209,8 @@ async function analyzeBuilding(building) {
     animateCountUp(lossDisplay, data.monthly_loss_usd);
 
     // Update Efficiency Loss % & Panel Temperature
-    document.getElementById('efficiency-loss-display').textContent = `${data.loss_pct}%`;
+    const effLoss = data.efficiency_loss_pct !== undefined ? data.efficiency_loss_pct : data.loss_pct;
+    document.getElementById('efficiency-loss-display').textContent = (effLoss * 100).toFixed(1) + "%";
     document.getElementById('panel-temp-display').textContent = `${data.t_cell}°C`;
 
     // Trigger initial simulation call with reset sliders
@@ -314,13 +315,10 @@ async function loadForecast() {
     }];
 
     const layout = {
-      title: {
-        text: '7-Day Efficiency Forecast — Phoenix AZ',
-        font: { color: '#f9fafb', size: 14, family: 'Inter' }
-      },
+      title: '',
       paper_bgcolor: '#111827',
       plot_bgcolor: '#111827',
-      margin: { l: 40, r: 20, t: 40, b: 35 },
+      margin: { l: 40, r: 20, t: 10, b: 35 },
       xaxis: {
         tickfont: { color: '#9ca3af', family: 'Inter' },
         gridcolor: '#1f2937'

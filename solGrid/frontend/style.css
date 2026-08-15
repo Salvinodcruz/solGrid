@@ -375,27 +375,35 @@ input[type="range"]::-webkit-slider-thumb:hover {
 .sim-results-box {
   display: flex;
   justify-content: space-between;
+  gap: 1rem;
   background: rgba(34, 197, 94, 0.08);
   border: 1px solid rgba(34, 197, 94, 0.25);
   border-radius: 8px;
   padding: 0.85rem 1.25rem;
+  overflow: visible;
 }
 
 .sim-metric {
   display: flex;
   flex-direction: column;
+  min-width: 0;
+  overflow: visible;
 }
 
 .sim-label {
-  font-size: 0.725rem;
+  font-size: 10px;
   color: var(--text-secondary);
   text-transform: uppercase;
+  white-space: nowrap;
+  overflow: visible;
 }
 
 .sim-value {
   font-size: 1.35rem;
   font-weight: 700;
   margin-top: 2px;
+  white-space: nowrap;
+  overflow: visible;
 }
 
 .sim-badge {
@@ -409,7 +417,8 @@ input[type="range"]::-webkit-slider-thumb:hover {
 .payback-grid {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
-  gap: 0.75rem;
+  gap: 8px;
+  overflow: visible;
 }
 
 .payback-item {
@@ -419,6 +428,8 @@ input[type="range"]::-webkit-slider-thumb:hover {
   padding: 0.6rem 0.8rem;
   display: flex;
   flex-direction: column;
+  min-width: 0;
+  overflow: visible;
 }
 
 .p-name {

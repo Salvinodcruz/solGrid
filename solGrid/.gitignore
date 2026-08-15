@@ -5,3 +5,4 @@ __pycache__/
 models/*.pkl
 data/*.csv
 .ipynb_checkpoints/
+frontend/config.js
