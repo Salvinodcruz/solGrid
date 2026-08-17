@@ -1,5 +1,5 @@
-// Replace with your Mapbox public token
-mapboxgl.accessToken = 'pk.YOUR_MAPBOX_TOKEN_HERE';
+// Load Mapbox token securely from window.CONFIG
+mapboxgl.accessToken = window.CONFIG?.MAPBOX_TOKEN || '';
 
 const API_BASE = 'http://localhost:5000';
 
@@ -108,6 +108,22 @@ function animateCountUp(element, targetVal, duration = 800) {
 
 // 1. Initialize Mapbox Map
 function initMap() {
+  const token = window.CONFIG?.MAPBOX_TOKEN || '';
+  const isPlaceholder = !token || token.includes('YOUR_MAPBOX_TOKEN_HERE');
+
+  mapboxgl.accessToken = token;
+
+  if (isPlaceholder) {
+    const mapContainer = document.getElementById('map');
+    if (mapContainer && !mapContainer.querySelector('.mapbox-token-banner')) {
+      const banner = document.createElement('div');
+      banner.className = 'mapbox-token-banner';
+      banner.style.cssText = 'position: absolute; top: 16px; left: 16px; right: 16px; z-index: 100; background: rgba(17, 24, 39, 0.95); border: 1px solid #f59e0b; color: #fef3c7; padding: 12px 16px; border-radius: 8px; font-size: 13px; font-weight: 500; backdrop-filter: blur(8px); box-shadow: 0 4px 20px rgba(0,0,0,0.5); display: flex; align-items: center; gap: 8px;';
+      banner.innerHTML = '<span>⚠️</span><span><strong>Mapbox token required.</strong> Copy <code>config.example.js</code> to <code>config.js</code> and insert your public key.</span>';
+      mapContainer.appendChild(banner);
+    }
+  }
+
   try {
     map = new mapboxgl.Map({
       container: 'map',
