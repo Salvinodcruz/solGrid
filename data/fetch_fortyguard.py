@@ -6,6 +6,7 @@ Usage: python data/fetch_fortyguard.py
 """
 
 import json
+import os
 import sys
 from pathlib import Path
 
@@ -27,7 +28,7 @@ def fetch_heat_intelligence():
         "state": config.STATE,
     }
     headers = {
-        "Authorization": f"Bearer {config.FORTYGUARD_API_KEY}",
+        "api-key": os.getenv("FORTYGUARD_API_KEY"),
         "Content-Type": "application/json",
     }
 

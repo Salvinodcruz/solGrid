@@ -17,6 +17,10 @@ from config import (
     TEMP_COEFFICIENT,
 )
 
+# Maximum roof surface temperature elevation above ambient for a pure black roof (albedo=0) at peak GHI (1000 W/m2).
+# For a dark commercial roof (albedo ~ 0.15-0.20) at peak daylight (high GHI), this gives a ~19-21 C offset (within 15-25 C).
+ROOF_THERMAL_OFFSET_MAX_C = 25.0
+
 # A unit rise in roof albedo drops roof surface temperature by this much.
 # Published cool-roof measurements land in the 10-20 C/unit range.
 ALBEDO_COOLING_C_PER_UNIT = 12.0
@@ -58,15 +62,45 @@ class SolGridEngine:
         self.isolation_forest = None
         self.baseline_risk_median = None
 
-    def calculate_thermal_metrics(self, t_roof, ghi, wind_speed, albedo, rated_kw):
-        """Thermal loss and revenue impact via the Faiman wind-corrected NOCT model."""
-        t_roof = float(t_roof)
+    def calculate_thermal_offset(self, ghi, albedo):
+        """Dynamic conversion offset: scales with solar irradiance (GHI) and roof material absorptivity (1 - albedo).
+
+        - For dark commercial roofs (albedo ~ 0.15-0.20) during peak daylight (high GHI ~ 1000 W/m2),
+          thermal_offset is roughly 15 C to 25 C hotter than ambient.
+        - When GHI is 0 (nighttime), thermal_offset is 0 C (t_roof roughly equals t_ambient).
+        """
+        ghi_norm = max(0.0, float(ghi)) / 1000.0
+        absorptivity = max(0.0, min(1.0, 1.0 - float(albedo)))
+        return absorptivity * ghi_norm * ROOF_THERMAL_OFFSET_MAX_C
+
+    def calculate_roof_temp(self, t_ambient, ghi, albedo):
+        """Dynamic conversion step: t_roof = t_ambient + thermal_offset."""
+        return float(t_ambient) + self.calculate_thermal_offset(ghi, albedo)
+
+    def calculate_thermal_metrics(self, t_ambient=None, ghi=0.0, wind_speed=0.0, albedo=0.2, rated_kw=250.0, t_roof=None):
+        """Thermal loss, cell temperature, and revenue impact via the Faiman wind-corrected NOCT model.
+
+        Takes t_ambient as the base input, calculates t_roof dynamically based on GHI and albedo,
+        and then calculates t_cell and financial losses.
+        """
         ghi = float(ghi)
         albedo = float(albedo)
+        wind_speed = float(wind_speed)
         rated_kw = float(rated_kw)
 
+        thermal_offset = self.calculate_thermal_offset(ghi, albedo)
+
+        if t_ambient is not None:
+            t_ambient = float(t_ambient)
+            t_roof = t_ambient + thermal_offset
+        elif t_roof is not None:
+            t_roof = float(t_roof)
+            t_ambient = t_roof - thermal_offset
+        else:
+            raise ValueError("Either t_ambient or t_roof must be provided")
+
         wind_factor = 9.5 / (5.7 + 3.8 * max(float(wind_speed), 0.1))
-        t_cell = t_roof + ((self.noct - 20) / 800) * ghi * wind_factor
+        t_cell = t_roof + ((self.noct - 20) / 800.0) * ghi * wind_factor
         temp_delta = max(0.0, t_cell - 25.0)
         loss_pct = temp_delta * abs(self.temp_coefficient)
 
@@ -82,6 +116,8 @@ class SolGridEngine:
         ) * 100)
 
         return {
+            "t_ambient": round(t_ambient, 2),
+            "thermal_offset": round(thermal_offset, 2),
             "t_roof": round(t_roof, 2),
             "ghi": round(ghi, 2),
             "wind_speed": round(float(wind_speed), 2),
@@ -99,28 +135,43 @@ class SolGridEngine:
             "risk_score": round(risk_score, 2),
         }
 
-    def simulate_intervention(self, t_roof, ghi, wind_speed, albedo, rated_kw,
-                              new_albedo=None, misting_intensity=0.0, forced_wind=0.0):
-        """Compare baseline thermal metrics against a stacked intervention scenario."""
+    def simulate_intervention(self, t_ambient=None, ghi=0.0, wind_speed=0.0, albedo=0.2, rated_kw=250.0,
+                              new_albedo=None, misting_intensity=0.0, forced_wind=0.0, t_roof=None):
+        """Compare baseline thermal metrics against a stacked intervention scenario.
+
+        Takes t_ambient as base input, calculates baseline t_roof, applies intervention offsets
+        (albedo coating, misting, ventilation), and computes post-intervention metrics.
+        """
         print(f"[SolGridEngine] simulate_intervention received rated_kw: {rated_kw}")
-        t_roof = float(t_roof)
         albedo = float(albedo)
+        ghi = float(ghi)
         wind_speed = float(wind_speed)
         rated_kw = float(rated_kw)
         misting_intensity = min(1.0, max(0.0, float(misting_intensity)))
         forced_wind = max(0.0, float(forced_wind))
 
-        before = self.calculate_thermal_metrics(t_roof, ghi, wind_speed, albedo, rated_kw)
+        before = self.calculate_thermal_metrics(
+            t_ambient=t_ambient, ghi=ghi, wind_speed=wind_speed, albedo=albedo, rated_kw=rated_kw, t_roof=t_roof
+        )
+        base_t_ambient = before["t_ambient"]
+        base_t_roof = before["t_roof"]
 
         adj_albedo = albedo if new_albedo is None else float(new_albedo)
-        albedo_cooling = max(0.0, adj_albedo - albedo) * ALBEDO_COOLING_C_PER_UNIT
+        offset_before = before["thermal_offset"]
+        offset_after = self.calculate_thermal_offset(ghi, adj_albedo)
+        albedo_cooling = max(0.0, offset_before - offset_after)
         misting_cooling = misting_intensity * MISTING_MAX_COOLING_C
 
-        adj_t_roof = t_roof - albedo_cooling - misting_cooling
+        adj_t_roof = base_t_roof - albedo_cooling - misting_cooling
         adj_wind_speed = wind_speed + forced_wind
 
         after = self.calculate_thermal_metrics(
-            adj_t_roof, ghi, adj_wind_speed, adj_albedo, rated_kw
+            t_ambient=base_t_ambient,
+            ghi=ghi,
+            wind_speed=adj_wind_speed,
+            albedo=adj_albedo,
+            rated_kw=rated_kw,
+            t_roof=adj_t_roof,
         )
 
         temp_drop_c = before["t_cell"] - after["t_cell"]
@@ -146,7 +197,7 @@ class SolGridEngine:
             "albedo_cooling_c": round(albedo_cooling, 2),
             "misting_cooling_c": round(misting_cooling, 2),
             "forced_wind_added_ms": round(forced_wind, 2),
-            "roof_temp_drop_c": round(t_roof - adj_t_roof, 2),
+            "roof_temp_drop_c": round(base_t_roof - adj_t_roof, 2),
             "temp_drop_c": round(temp_drop_c, 2),
             "loss_pct_reduction": round(before["loss_pct"] - after["loss_pct"], 4),
             "monthly_recovered_usd": round(monthly_recovered_usd, 2),
@@ -165,7 +216,7 @@ class SolGridEngine:
         rows = []
         for _ in range(200):
             metrics = self.calculate_thermal_metrics(
-                t_roof=rng.uniform(35.0, 55.0),
+                t_ambient=rng.uniform(32.0, 44.0),
                 ghi=950.0,
                 wind_speed=rng.uniform(1.0, 4.5),
                 albedo=rng.uniform(0.15, 0.80),

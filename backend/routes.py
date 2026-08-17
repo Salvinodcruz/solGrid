@@ -19,13 +19,13 @@ VERSION = "1.0.0"
 
 # Phoenix August profile, stands in until Prophet lands in Phase 3.
 FORECAST_DAYS = [
-    {"t_roof": 61.5, "loss_pct": 15.8, "action": "Run misting through the 12:00-16:00 peak window."},
-    {"t_roof": 63.2, "loss_pct": 17.1, "action": "Pre-cool the array at 10:00 and hold misting until 17:00."},
-    {"t_roof": 65.0, "loss_pct": 18.9, "action": "Peak heat day: run full misting plus forced ventilation all afternoon."},
-    {"t_roof": 64.1, "loss_pct": 18.2, "action": "Maintain full cooling and defer any rooftop maintenance."},
-    {"t_roof": 60.8, "loss_pct": 15.1, "action": "Standard misting schedule; verify nozzle pressure before noon."},
-    {"t_roof": 57.4, "loss_pct": 13.6, "action": "Reduced misting is sufficient; good window for panel cleaning."},
-    {"t_roof": 56.2, "loss_pct": 13.0, "action": "Lowest-stress day of the week; schedule inspections and repairs."},
+    {"t_ambient": 42.0, "t_roof": 62.2, "loss_pct": 15.8, "action": "Run misting through the 12:00-16:00 peak window."},
+    {"t_ambient": 43.0, "t_roof": 63.5, "loss_pct": 17.1, "action": "Pre-cool the array at 10:00 and hold misting until 17:00."},
+    {"t_ambient": 44.5, "t_roof": 65.0, "loss_pct": 18.9, "action": "Peak heat day: run full misting plus forced ventilation all afternoon."},
+    {"t_ambient": 43.8, "t_roof": 64.1, "loss_pct": 18.2, "action": "Maintain full cooling and defer any rooftop maintenance."},
+    {"t_ambient": 41.5, "t_roof": 60.8, "loss_pct": 15.1, "action": "Standard misting schedule; verify nozzle pressure before noon."},
+    {"t_ambient": 39.5, "t_roof": 57.4, "loss_pct": 13.6, "action": "Reduced misting is sufficient; good window for panel cleaning."},
+    {"t_ambient": 38.0, "t_roof": 56.2, "loss_pct": 13.0, "action": "Lowest-stress day of the week; schedule inspections and repairs."},
 ]
 
 
@@ -39,15 +39,27 @@ def risk_level(loss_pct):
 
 
 def _thermal_args(body):
-    """Pull and validate the five required thermal inputs from a request body."""
-    required = ["t_roof", "ghi", "wind_speed", "albedo", "rated_kw"]
+    """Pull and validate thermal inputs from a request body.
+    
+    Accepts t_ambient as the base input (or t_roof as fallback), along with ghi, wind_speed, albedo, and rated_kw.
+    """
+    if body.get("t_ambient") is None and body.get("t_roof") is None:
+        raise ValueError("missing required field(s): t_ambient (or t_roof)")
+
+    required = ["ghi", "wind_speed", "albedo", "rated_kw"]
     missing = [key for key in required if body.get(key) is None]
     if missing:
         raise ValueError(f"missing required field(s): {', '.join(missing)}")
+
     try:
-        return {key: float(body[key]) for key in required}
+        args = {key: float(body[key]) for key in required}
+        if body.get("t_ambient") is not None:
+            args["t_ambient"] = float(body["t_ambient"])
+        if body.get("t_roof") is not None:
+            args["t_roof"] = float(body["t_roof"])
+        return args
     except (TypeError, ValueError):
-        raise ValueError(f"{', '.join(required)} must all be numeric")
+        raise ValueError("thermal inputs must all be numeric")
 
 
 def _optional_float(body, key):
