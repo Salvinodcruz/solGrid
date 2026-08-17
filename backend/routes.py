@@ -185,6 +185,7 @@ def forecast():
         days.append({
             "day_name": day.strftime("%A"),
             "date": day.isoformat(),
+            "predicted_t_ambient": entry.get("t_ambient", 42.0),
             "predicted_t_roof": entry["t_roof"],
             "predicted_loss_pct": entry["loss_pct"],
             "risk_level": risk_level(entry["loss_pct"]),

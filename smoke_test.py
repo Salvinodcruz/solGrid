@@ -8,21 +8,21 @@ import requests
 BASE = "http://127.0.0.1:5000"
 
 DEMO = {
-    "t_roof": 62.5,
+    "t_ambient": 42.0,
     "ghi": 950,
     "wind_speed": 1.2,
     "albedo": 0.15,
-    "rated_kw": 1000,
+    "rated_kw": 500,
     "label": "1234 N Central Ave",
 }
 
 PORTFOLIO = {
     "buildings": [
-        {"building_id": "B001", "label": "1234 N Central Ave", "t_roof": 64.0, "ghi": 950, "wind_speed": 1.2, "albedo": 0.15, "rated_kw": 1000},
-        {"building_id": "B002", "label": "88 W Jefferson St", "t_roof": 58.5, "ghi": 950, "wind_speed": 1.8, "albedo": 0.25, "rated_kw": 350},
-        {"building_id": "B003", "label": "4501 E Camelback Rd", "t_roof": 52.0, "ghi": 950, "wind_speed": 2.6, "albedo": 0.45, "rated_kw": 250},
-        {"building_id": "B004", "label": "770 S Mill Ave", "t_roof": 45.5, "ghi": 950, "wind_speed": 3.2, "albedo": 0.65, "rated_kw": 180},
-        {"building_id": "B005", "label": "2020 N 7th St", "t_roof": 39.0, "ghi": 950, "wind_speed": 4.0, "albedo": 0.80, "rated_kw": 100},
+        {"building_id": "B001", "label": "1234 N Central Ave", "t_ambient": 42.0, "ghi": 950, "wind_speed": 1.2, "albedo": 0.15, "rated_kw": 500},
+        {"building_id": "B002", "label": "88 W Jefferson St", "t_ambient": 42.0, "ghi": 950, "wind_speed": 1.8, "albedo": 0.25, "rated_kw": 350},
+        {"building_id": "B003", "label": "4501 E Camelback Rd", "t_ambient": 41.0, "ghi": 950, "wind_speed": 2.6, "albedo": 0.45, "rated_kw": 250},
+        {"building_id": "B004", "label": "770 S Mill Ave", "t_ambient": 39.5, "ghi": 950, "wind_speed": 3.2, "albedo": 0.65, "rated_kw": 180},
+        {"building_id": "B005", "label": "2020 N 7th St", "t_ambient": 37.0, "ghi": 950, "wind_speed": 4.0, "albedo": 0.80, "rated_kw": 100},
     ],
     "budget": 50000,
 }
@@ -77,8 +77,8 @@ show("5. GET /forecast", results["forecast"])
 
 # assertions
 print(f"\n{'=' * 70}\nASSERTIONS\n{'=' * 70}")
-check("analyze monthly_loss_usd", results["analyze"]["monthly_loss_usd"], 2000)
-check("simulate monthly_recovered_usd", results["simulate"]["monthly_recovered_usd"], 400)
+check("analyze monthly_loss_usd", results["analyze"]["monthly_loss_usd"], 3000)
+check("simulate monthly_recovered_usd", results["simulate"]["monthly_recovered_usd"], 500)
 check("simulate temp_drop_c", results["simulate"]["temp_drop_c"], 5)
 
 anomalies = results["portfolio"]["portfolio_summary"]["anomaly_count"]
