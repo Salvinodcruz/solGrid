@@ -75,6 +75,12 @@ r.raise_for_status()
 results["forecast"] = r.json()
 show("5. GET /forecast", results["forecast"])
 
+# 6. satellite-segmentation
+r = requests.get(f"{BASE}/satellite-segmentation", timeout=10)
+r.raise_for_status()
+results["satellite-segmentation"] = r.json()
+show("6. GET /satellite-segmentation", results["satellite-segmentation"])
+
 # assertions
 print(f"\n{'=' * 70}\nASSERTIONS\n{'=' * 70}")
 check("analyze monthly_loss_usd", results["analyze"]["monthly_loss_usd"], 3000)
@@ -87,10 +93,14 @@ print(f"  [{'PASS' if ok else 'FAIL'}] portfolio anomaly_count: {anomalies} in r
 if not ok:
     failures.append(f"anomaly_count = {anomalies}, expected 1-2")
 
+sat_feats = len(results["satellite-segmentation"].get("geojson", {}).get("features", []))
+check("satellite features count", sat_feats, 4, ">=")
+
 print(f"\n{'=' * 70}")
 if failures:
     print(f"{len(failures)} ASSERTION FAILURE(S):")
     for f in failures:
         print(f"  - {f}")
     sys.exit(1)
-print("ALL 5 ENDPOINTS OK, ALL ASSERTIONS PASSED")
+print("ALL ENDPOINTS OK, ALL SATELLITE SEGMENTATION ASSERTIONS PASSED")
+

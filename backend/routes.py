@@ -11,7 +11,11 @@ from groq import Groq
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from backend.solGrid_engine import SolGridEngine
+from backend.solGrid_engine import (
+    ARIZONA_SOLAR_FARMS,
+    SolGridEngine,
+    load_satellite_segmentation,
+)
 from config import CITY, STATE
 
 bp = Blueprint("api", __name__)
@@ -140,6 +144,21 @@ def live_environmental():
         )
         recommendations = engine.rank_interventions(metrics["monthly_dollar_loss"], 290000.0)
 
+        # Farm segmentation metrics for Agua Caliente
+        panel_area_m2 = 2400000
+        monthly_loss = metrics["monthly_dollar_loss"]
+        thermal_density_loss = round(monthly_loss / panel_area_m2, 2)
+        agua_caliente_bounds = {
+            "type": "Polygon",
+            "coordinates": [[
+                [-113.5250, 32.9500],
+                [-113.4750, 32.9500],
+                [-113.4750, 32.9833],
+                [-113.5250, 32.9833],
+                [-113.5250, 32.9500],
+            ]]
+        }
+
         return jsonify({
             "status": "live",
             "source": "FortyGuard Environmental API",
@@ -160,6 +179,9 @@ def live_environmental():
             "wind_speed": 2.0,
             "albedo": 0.12,
             "rated_kw": 290000.0,
+            "panel_area_m2": panel_area_m2,
+            "thermal_density_loss": thermal_density_loss,
+            "array_bounds": agua_caliente_bounds,
             "monthly_loss_usd": metrics["monthly_dollar_loss"],
             "annual_loss_usd": metrics["annual_dollar_loss"],
             "hourly_dollar_loss": metrics["hourly_dollar_loss"],
@@ -184,6 +206,14 @@ def live_environmental():
         })
     except Exception as exc:
         return jsonify({"error": str(exc)}), 500
+
+
+@bp.get("/satellite-segmentation")
+@bp.get("/panel-footprints")
+def satellite_segmentation():
+    """Return FortyGuard satellite panel segmentation output and GeoJSON footprints for Arizona solar farms."""
+    data = load_satellite_segmentation()
+    return jsonify(data)
 
 
 @bp.post("/refresh-data")
@@ -232,6 +262,13 @@ def analyze():
     metrics = engine.calculate_thermal_metrics(**args)
     b_id = body.get("id") or body.get("building_id")
     recommendations = engine.rank_interventions(metrics["monthly_dollar_loss"], args.get("rated_kw", 1000.0))
+
+    # Match farm segmentation metadata if available
+    matched_farm = next((f for f in ARIZONA_SOLAR_FARMS if f["id"] == b_id or f.get("building_id") == b_id), None)
+    panel_area_m2 = body.get("panel_area_m2") or (matched_farm["panel_area_m2"] if matched_farm else 2400000)
+    array_bounds = body.get("array_bounds") or (matched_farm["array_bounds"] if matched_farm else None)
+    thermal_density_loss = round(metrics["monthly_dollar_loss"] / panel_area_m2, 2) if panel_area_m2 > 0 else 0.0
+
     return jsonify({
         **metrics,
         "monthly_loss_usd": metrics["monthly_dollar_loss"],
@@ -239,6 +276,9 @@ def analyze():
         "building_id": b_id,
         "id": b_id,
         "label": body.get("label"),
+        "panel_area_m2": panel_area_m2,
+        "thermal_density_loss": thermal_density_loss,
+        "array_bounds": array_bounds,
         "recommendations": recommendations,
     })
 

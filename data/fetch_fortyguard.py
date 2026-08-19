@@ -19,7 +19,11 @@ import requests
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 import config
-from backend.solGrid_engine import SolGridEngine
+from backend.solGrid_engine import (
+    ARIZONA_SOLAR_FARMS,
+    SolGridEngine,
+    load_satellite_segmentation,
+)
 
 PROCESSED_FORTYGUARD_PATH = getattr(
     config, "PROCESSED_FORTYGUARD_PATH", config.DATA_DIR / "processed_fortyguard.json"

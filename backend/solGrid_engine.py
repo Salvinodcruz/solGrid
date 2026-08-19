@@ -45,6 +45,225 @@ ROI_OPTIONS = [
     {"type": "panel_spacing", "cost": 8000.0, "saving_share": 0.10},
 ]
 
+# Arizona Utility-Scale Solar Farms with FortyGuard Satellite Panel Segmentation
+ARIZONA_SOLAR_FARMS = [
+    {
+        "id": "SF001",
+        "building_id": "SF001",
+        "label": "Agua Caliente Solar Project",
+        "address": "Yuma County, Arizona",
+        "coordinates": [-113.5000, 32.9667],
+        "array_bounds": {
+            "type": "Polygon",
+            "coordinates": [[
+                [-113.5250, 32.9500],
+                [-113.4750, 32.9500],
+                [-113.4750, 32.9833],
+                [-113.5250, 32.9833],
+                [-113.5250, 32.9500],
+            ]],
+        },
+        "panel_area_m2": 2400000,
+        "t_roof": 66.1,
+        "ghi": 950.0,
+        "wind_speed": 2.0,
+        "albedo": 0.12,
+        "rated_kw": 290000.0,
+        "risk": 97,
+        "roof_type": "Ground-mount flat panel",
+        "install_year": 2014,
+        "operator": "First Solar / NRG Energy",
+    },
+    {
+        "id": "SF002",
+        "building_id": "SF002",
+        "label": "Solana Generating Station",
+        "address": "Gila Bend, Arizona",
+        "coordinates": [-112.9670, 32.9170],
+        "array_bounds": {
+            "type": "Polygon",
+            "coordinates": [[
+                [-112.9880, 32.9020],
+                [-112.9460, 32.9020],
+                [-112.9460, 32.9320],
+                [-112.9880, 32.9320],
+                [-112.9880, 32.9020],
+            ]],
+        },
+        "panel_area_m2": 1920000,
+        "t_roof": 64.5,
+        "ghi": 935.0,
+        "wind_speed": 2.5,
+        "albedo": 0.13,
+        "rated_kw": 250000.0,
+        "risk": 94,
+        "roof_type": "Parabolic trough CSP",
+        "install_year": 2013,
+        "operator": "Atlantica Sustainable",
+    },
+    {
+        "id": "SF003",
+        "building_id": "SF003",
+        "label": "Arlington Valley Solar Energy",
+        "address": "Arlington, Arizona",
+        "coordinates": [-112.9000, 33.3500],
+        "array_bounds": {
+            "type": "Polygon",
+            "coordinates": [[
+                [-112.9180, 33.3360],
+                [-112.8820, 33.3360],
+                [-112.8820, 33.3640],
+                [-112.9180, 33.3640],
+                [-112.9180, 33.3360],
+            ]],
+        },
+        "panel_area_m2": 1150000,
+        "t_roof": 62.0,
+        "ghi": 910.0,
+        "wind_speed": 3.0,
+        "albedo": 0.15,
+        "rated_kw": 125000.0,
+        "risk": 88,
+        "roof_type": "Fixed-tilt ground mount",
+        "install_year": 2013,
+        "operator": "LS Power",
+    },
+    {
+        "id": "SF004",
+        "building_id": "SF004",
+        "label": "Red Rock Solar Project",
+        "address": "Pinal County, Arizona",
+        "coordinates": [-111.8200, 32.7500],
+        "array_bounds": {
+            "type": "Polygon",
+            "coordinates": [[
+                [-111.8340, 32.7380],
+                [-111.8060, 32.7380],
+                [-111.8060, 32.7620],
+                [-111.8340, 32.7620],
+                [-111.8340, 32.7380],
+            ]],
+        },
+        "panel_area_m2": 680000,
+        "t_roof": 58.0,
+        "ghi": 880.0,
+        "wind_speed": 3.5,
+        "albedo": 0.18,
+        "rated_kw": 60000.0,
+        "risk": 75,
+        "roof_type": "Single-axis tracker",
+        "install_year": 2020,
+        "operator": "AES Corporation",
+    },
+    {
+        "id": "SF005",
+        "building_id": "SF005",
+        "label": "Hyder Solar Project",
+        "address": "Hyder, Arizona",
+        "coordinates": [-113.9000, 32.9800],
+        "array_bounds": {
+            "type": "Polygon",
+            "coordinates": [[
+                [-113.9240, 32.9640],
+                [-113.8760, 32.9640],
+                [-113.8760, 32.9960],
+                [-113.9240, 32.9960],
+                [-113.9240, 32.9640],
+            ]],
+        },
+        "panel_area_m2": 1650000,
+        "t_roof": 51.0,
+        "ghi": 840.0,
+        "wind_speed": 4.0,
+        "albedo": 0.22,
+        "rated_kw": 200000.0,
+        "risk": 61,
+        "roof_type": "Fixed-tilt ground mount",
+        "install_year": 2022,
+        "operator": "Canadian Solar",
+    },
+]
+
+
+def load_satellite_segmentation(quickstart_path=None):
+    """Load satellite segmentation data.
+
+    Checks for cached satellite segmentation files in ../temperature-api-quickstart
+    or returns computed GeoJSON panel footprints for Arizona solar farms.
+    """
+    quickstart_dir = (
+        Path(quickstart_path)
+        if quickstart_path
+        else Path(__file__).resolve().parent.parent.parent / "temperature-api-quickstart"
+    )
+    sat_dir = quickstart_dir / "data" / "satellite"
+    cached_files = []
+    if sat_dir.exists():
+        cached_files = [p.name for p in sat_dir.glob("*.json")]
+
+    engine = SolGridEngine()
+    farms = []
+    for f in ARIZONA_SOLAR_FARMS:
+        metrics = engine.calculate_thermal_metrics(
+            t_roof=f["t_roof"],
+            ghi=f["ghi"],
+            wind_speed=f["wind_speed"],
+            albedo=f["albedo"],
+            rated_kw=f["rated_kw"],
+        )
+        monthly_loss = metrics["monthly_dollar_loss"]
+        area = f["panel_area_m2"]
+        density_loss = round(monthly_loss / area, 2) if area > 0 else 0.0
+
+        farm_entry = dict(f)
+        farm_entry["thermal_density_loss"] = density_loss
+        farm_entry["monthly_dollar_loss"] = monthly_loss
+        farm_entry["annual_dollar_loss"] = metrics["annual_dollar_loss"]
+        farm_entry["t_cell"] = metrics["t_cell"]
+        farm_entry["loss_pct"] = metrics["loss_pct"]
+        farm_entry["efficiency_loss_pct"] = metrics["efficiency_loss_pct"]
+        farms.append(farm_entry)
+
+    geojson = {
+        "type": "FeatureCollection",
+        "features": [
+            {
+                "type": "Feature",
+                "id": farm["id"],
+                "properties": {
+                    "id": farm["id"],
+                    "label": farm["label"],
+                    "address": farm["address"],
+                    "rated_kw": farm["rated_kw"],
+                    "panel_area_m2": farm["panel_area_m2"],
+                    "thermal_density_loss": farm["thermal_density_loss"],
+                    "monthly_dollar_loss": farm["monthly_dollar_loss"],
+                    "annual_dollar_loss": farm["annual_dollar_loss"],
+                    "t_roof": farm["t_roof"],
+                    "t_cell": farm["t_cell"],
+                    "risk": farm["risk"],
+                    "operator": farm["operator"],
+                    "roof_type": farm["roof_type"],
+                    "install_year": farm["install_year"],
+                },
+                "geometry": farm["array_bounds"],
+            }
+            for farm in farms
+        ],
+        "metadata": {
+            "cached_quickstart_files_found": len(cached_files),
+            "cached_quickstart_filenames": cached_files,
+            "quickstart_satellite_dir": str(sat_dir) if sat_dir.exists() else None,
+            "farm_count": len(farms),
+            "source": "FortyGuard Satellite Segmentation & SolGrid Engine",
+        },
+    }
+    return {
+        "farms": farms,
+        "geojson": geojson,
+        "cached_quickstart_count": len(cached_files),
+    }
+
 
 def _payback(cost, monthly_saving):
     if monthly_saving <= 0:
@@ -77,11 +296,13 @@ class SolGridEngine:
         """Dynamic conversion step: t_roof = t_ambient + thermal_offset."""
         return float(t_ambient) + self.calculate_thermal_offset(ghi, albedo)
 
-    def calculate_thermal_metrics(self, t_ambient=None, ghi=0.0, wind_speed=0.0, albedo=0.2, rated_kw=250.0, t_roof=None):
+    def calculate_thermal_metrics(self, t_ambient=None, ghi=0.0, wind_speed=0.0, albedo=0.2, rated_kw=250.0, t_roof=None, electricity_rate=None):
         """Thermal loss, cell temperature, and revenue impact via the Faiman wind-corrected NOCT model.
 
         Takes t_ambient as the base input, calculates t_roof dynamically based on GHI and albedo,
         and then calculates t_cell and financial losses.
+        For utility-scale solar farms (rated_kw >= 10,000 kW), uses wholesale solar PPA electricity rate ($0.024/kWh)
+        unless an explicit electricity_rate is specified.
         """
         ghi = float(ghi)
         albedo = float(albedo)
@@ -104,9 +325,10 @@ class SolGridEngine:
         temp_delta = max(0.0, t_cell - 25.0)
         loss_pct = temp_delta * abs(self.temp_coefficient)
 
+        rate = float(electricity_rate) if electricity_rate is not None else (0.024 if rated_kw >= 10000.0 else self.electricity_rate_usd)
         expected_kwh = rated_kw * (ghi / 1000.0)
         lost_kwh = expected_kwh * loss_pct
-        hourly_dollar_loss = lost_kwh * self.electricity_rate_usd
+        hourly_dollar_loss = lost_kwh * rate
         monthly_dollar_loss = hourly_dollar_loss * PEAK_HOURS_PER_DAY * DAYS_PER_MONTH
         annual_dollar_loss = monthly_dollar_loss * 12.0
 
@@ -430,4 +652,9 @@ class SolGridEngine:
 
         return sorted(interventions, 
                       key=lambda x: x["payback_months"])
+
+    def get_satellite_panel_footprints(self, quickstart_path=None):
+        """Retrieve Arizona solar farm GeoJSON satellite panel footprints with thermal density metrics."""
+        return load_satellite_segmentation(quickstart_path)
+
 

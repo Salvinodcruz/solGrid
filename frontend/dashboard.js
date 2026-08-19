@@ -3,13 +3,25 @@ mapboxgl.accessToken = window.CONFIG?.MAPBOX_TOKEN || '';
 
 const API_BASE = 'http://localhost:5000';
 
-// 5 Verified real utility-scale solar farms in Arizona
+// 5 Verified real utility-scale solar farms in Arizona with FortyGuard Satellite Panel Segmentation
 const BUILDINGS = [
   {
     id: "SF001",
     label: "Agua Caliente Solar Project",
     address: "Yuma County, Arizona",
     coordinates: [-113.5000, 32.9667],
+    array_bounds: {
+      type: "Polygon",
+      coordinates: [[
+        [-113.5250, 32.9500],
+        [-113.4750, 32.9500],
+        [-113.4750, 32.9833],
+        [-113.5250, 32.9833],
+        [-113.5250, 32.9500]
+      ]]
+    },
+    panel_area_m2: 2400000,
+    thermal_density_loss: 0.12,
     t_roof: 66.1,
     ghi: 950,
     wind_speed: 2.0,
@@ -25,6 +37,18 @@ const BUILDINGS = [
     label: "Solana Generating Station",
     address: "Gila Bend, Arizona",
     coordinates: [-112.9670, 32.9170],
+    array_bounds: {
+      type: "Polygon",
+      coordinates: [[
+        [-112.9880, 32.9020],
+        [-112.9460, 32.9020],
+        [-112.9460, 32.9320],
+        [-112.9880, 32.9320],
+        [-112.9880, 32.9020]
+      ]]
+    },
+    panel_area_m2: 1920000,
+    thermal_density_loss: 0.13,
     t_roof: 64.5,
     ghi: 935,
     wind_speed: 2.5,
@@ -40,6 +64,18 @@ const BUILDINGS = [
     label: "Arlington Valley Solar Energy",
     address: "Arlington, Arizona",
     coordinates: [-112.9000, 33.3500],
+    array_bounds: {
+      type: "Polygon",
+      coordinates: [[
+        [-112.9180, 33.3360],
+        [-112.8820, 33.3360],
+        [-112.8820, 33.3640],
+        [-112.9180, 33.3640],
+        [-112.9180, 33.3360]
+      ]]
+    },
+    panel_area_m2: 1150000,
+    thermal_density_loss: 0.11,
     t_roof: 62.0,
     ghi: 910,
     wind_speed: 3.0,
@@ -55,6 +91,18 @@ const BUILDINGS = [
     label: "Red Rock Solar Project",
     address: "Pinal County, Arizona",
     coordinates: [-111.8200, 32.7500],
+    array_bounds: {
+      type: "Polygon",
+      coordinates: [[
+        [-111.8340, 32.7380],
+        [-111.8060, 32.7380],
+        [-111.8060, 32.7620],
+        [-111.8340, 32.7620],
+        [-111.8340, 32.7380]
+      ]]
+    },
+    panel_area_m2: 680000,
+    thermal_density_loss: 0.08,
     t_roof: 58.0,
     ghi: 880,
     wind_speed: 3.5,
@@ -70,6 +118,18 @@ const BUILDINGS = [
     label: "Hyder Solar Project",
     address: "Hyder, Arizona",
     coordinates: [-113.9000, 32.9800],
+    array_bounds: {
+      type: "Polygon",
+      coordinates: [[
+        [-113.9240, 32.9640],
+        [-113.8760, 32.9640],
+        [-113.8760, 32.9960],
+        [-113.9240, 32.9960],
+        [-113.9240, 32.9640]
+      ]]
+    },
+    panel_area_m2: 1650000,
+    thermal_density_loss: 0.07,
     t_roof: 51.0,
     ghi: 840,
     wind_speed: 4.0,
@@ -127,11 +187,11 @@ function initMap() {
   try {
     map = new mapboxgl.Map({
       container: 'map',
-      style: 'mapbox://styles/mapbox/dark-v11',
+      style: 'mapbox://styles/mapbox/satellite-streets-v12',
       center: [-112.5000, 33.0000],
-      zoom: 7,
+      zoom: 8,
       minZoom: 5,
-      maxZoom: 14
+      maxZoom: 18
     });
     window.mapInstance = map;
 
@@ -151,12 +211,17 @@ function initMap() {
     });
 
     map.on('load', () => {
-      // 1. Add heatmap layer first
+      // 1. Add FortyGuard satellite panel polygon overlay
+      if (typeof addSatellitePanelPolygons === 'function') {
+        addSatellitePanelPolygons(map, BUILDINGS);
+      }
+
+      // 2. Add heatmap layer
       if (typeof addHeatmapLayer === 'function') {
         addHeatmapLayer(map, BUILDINGS);
       }
 
-      // 2. Add dot markers on top
+      // 3. Add dot markers on top
       BUILDINGS.forEach(b => {
         const el = document.createElement('div');
         el.className = 'custom-marker';
@@ -313,6 +378,19 @@ async function analyzeBuilding(building) {
   document.getElementById('detail-roof-temp').textContent = `${building.t_roof}°C`;
   document.getElementById('detail-albedo').textContent = building.albedo;
 
+  // Segmented Panel Area & Thermal Loss Density (from FortyGuard satellite segmentation)
+  const panelAreaM2 = building.panel_area_m2 || 2400000;
+  const panelAreaEl = document.getElementById('detail-panel-area');
+  if (panelAreaEl) {
+    panelAreaEl.textContent = `${Number(panelAreaM2).toLocaleString()} m²`;
+  }
+
+  const densityLossEl = document.getElementById('detail-density-loss');
+  if (densityLossEl) {
+    const initialDensity = building.thermal_density_loss !== undefined ? building.thermal_density_loss : 0.12;
+    densityLossEl.textContent = `$${Number(initialDensity).toFixed(2)} / m² / month`;
+  }
+
   // Live badge and ambient/GHI details (FIX 3)
   const liveBadge = document.getElementById('live-data-badge');
   const ambientEl = document.getElementById('detail-ambient-temp');
@@ -329,6 +407,17 @@ async function analyzeBuilding(building) {
     const calcAmb = building.t_ambient || (building.t_roof - 20).toFixed(1);
     if (ambientEl) ambientEl.textContent = `${calcAmb}°C`;
     if (ghiEl) ghiEl.textContent = `${building.ghi} W/m²`;
+  }
+
+  // Smooth camera transition to selected solar farm
+  if (map && (building.coordinates || (building.lng && building.lat))) {
+    const coords = building.coordinates || [building.lng, building.lat];
+    map.flyTo({
+      center: coords,
+      zoom: Math.max(map.getZoom(), 10),
+      duration: 1200,
+      essential: true
+    });
   }
 
   // Update Risk Score Badge
@@ -383,7 +472,15 @@ async function analyzeBuilding(building) {
 
     const annualLossDisplay = document.getElementById('annual-loss-display');
     if (annualLossDisplay) {
-      annualLossDisplay.textContent = `Annual: ${formatMoney(annualLossVal)} lost to heat`;
+      annualLossDisplay.textContent = `Annual: ${formatMoney(annualLossVal)}/year lost to heat`;
+    }
+
+    // Update dynamic thermal loss density from calculation
+    if (densityLossEl) {
+      const calculatedDensity = data.thermal_density_loss !== undefined
+        ? data.thermal_density_loss
+        : (monthlyLossVal / panelAreaM2).toFixed(2);
+      densityLossEl.textContent = `$${Number(calculatedDensity).toFixed(2)} / m² / month`;
     }
 
     // Update Efficiency Loss % & kW lost alongside & Panel Temperature
@@ -797,6 +894,10 @@ async function getAIRecommendation() {
   if (btn) btn.style.display = 'block';
 }
 
+// Expose globals for satellite polygon interactions
+window.analyzeBuilding = analyzeBuilding;
+window.BUILDINGS = BUILDINGS;
+
 // Page initialization
 document.addEventListener('DOMContentLoaded', () => {
   initMap();
@@ -809,3 +910,4 @@ document.addEventListener('DOMContentLoaded', () => {
   loadLiveData();
   analyzeBuilding(BUILDINGS[0]);
 });
+

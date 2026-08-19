@@ -52,11 +52,11 @@
     <section class="map-panel">
       <div id="map"></div>
       <div class="map-overlay-legend">
-        <div class="legend-title">Thermal Risk Level</div>
+        <div class="legend-title">Satellite Heat Stress</div>
         <div class="legend-items">
-          <div class="legend-item"><span class="dot red"></span> > 80 High Risk</div>
-          <div class="legend-item"><span class="dot amber"></span> 60 - 80 Moderate</div>
-          <div class="legend-item"><span class="dot green"></span> &lt; 60 Optimal</div>
+          <div class="legend-item"><span class="dot red"></span> &gt; 62°C Critical Stress</div>
+          <div class="legend-item"><span class="dot amber"></span> 50°C - 62°C Moderate</div>
+          <div class="legend-item"><span class="dot green"></span> &lt; 50°C Optimal</div>
         </div>
       </div>
     </section>
@@ -138,6 +138,14 @@
           <div class="detail-item">
             <span class="detail-label">Surface Albedo</span>
             <span id="detail-albedo" class="detail-value">--</span>
+          </div>
+          <div class="detail-item">
+            <span class="detail-label">Segmented Panel Area</span>
+            <span id="detail-panel-area" class="detail-value">-- m²</span>
+          </div>
+          <div class="detail-item">
+            <span class="detail-label">Thermal Loss Density</span>
+            <span id="detail-density-loss" class="detail-value">-- / m² / month</span>
           </div>
         </div>
       </article>
