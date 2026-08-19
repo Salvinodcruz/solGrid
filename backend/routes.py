@@ -1,11 +1,13 @@
 """API routes for SolGrid Thermal Sync."""
 
+import os
 import sys
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 
 import pandas as pd
 from flask import Blueprint, jsonify, request
+from groq import Groq
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
@@ -73,11 +75,18 @@ def _optional_float(body, key):
 
 @bp.get("/health")
 def health():
+    import config
+    has_live_data = config.PROCESSED_FORTYGUARD_PATH.exists()
     return jsonify({
         "project": "SolGrid Thermal Sync",
         "version": VERSION,
         "status": "ok",
         "timestamp": datetime.now(timezone.utc).isoformat(),
+        "fortyguard_integration": {
+            "api_key_configured": bool(config.FORTYGUARD_API_KEY),
+            "endpoint": config.FORTYGUARD_URL,
+            "processed_data_available": has_live_data,
+        },
         "engine": {
             "loaded": True,
             "anomaly_detector_trained": engine.isolation_forest is not None,
@@ -85,6 +94,131 @@ def health():
             "electricity_rate_usd": engine.electricity_rate_usd,
         },
     })
+
+
+@bp.get("/live")
+@bp.get("/environmental-parameters")
+def live_environmental():
+    """Recalculate PV thermal degradation and efficiency loss from processed FortyGuard data.
+
+    1. Read processed_fortyguard.json
+    2. Extract peak_ghi and peak_t_ambient (indices 10-16 peak hours)
+    3. Calculate t_roof = peak_t_ambient + 20
+    4. Run calculate_thermal_metrics with:
+       t_roof=t_roof, ghi=peak_ghi, wind_speed=2.0, albedo=0.15, rated_kw=1000
+    5. Return full metrics plus the raw FortyGuard values so the frontend can show them
+    """
+    import json
+    import config
+
+    if not config.PROCESSED_FORTYGUARD_PATH.exists():
+        return jsonify({"error": "processed_fortyguard.json not found", "status": "no_live_data"}), 404
+
+    try:
+        data = json.loads(config.PROCESSED_FORTYGUARD_PATH.read_text(encoding="utf-8"))
+        hourly = data.get("hourly_timeseries", {})
+
+        t_ambient_list = hourly.get("apparent_temperature_celsius", [])
+        ghi_list = hourly.get("ghi", [])
+
+        # Peak hours 10am to 4pm (indices 10-16)
+        peak_t_ambient_slice = t_ambient_list[10:17] if len(t_ambient_list) >= 17 else t_ambient_list
+        peak_ghi_slice = ghi_list[10:17] if len(ghi_list) >= 17 else ghi_list
+
+        peak_t_ambient = float(max(peak_t_ambient_slice)) if peak_t_ambient_slice else float(data.get("peak_t_ambient") or data.get("apparent_temperature_celsius", 46.1))
+        peak_ghi = float(max(peak_ghi_slice)) if peak_ghi_slice else float(data.get("peak_ghi") or data.get("ghi", 950.0))
+
+        t_roof = peak_t_ambient + 20.0
+
+        # Calculate thermal metrics for SF001 Agua Caliente (290,000 kW / 290 MW, albedo 0.12, wind 2.0)
+        metrics = engine.calculate_thermal_metrics(
+            t_roof=t_roof,
+            ghi=peak_ghi,
+            wind_speed=2.0,
+            albedo=0.12,
+            rated_kw=290000.0,
+        )
+        recommendations = engine.rank_interventions(metrics["monthly_dollar_loss"], 290000.0)
+
+        return jsonify({
+            "status": "live",
+            "source": "FortyGuard Environmental API",
+            "location": {
+                "city": data.get("city", config.CITY),
+                "state": data.get("state", config.STATE),
+                "latitude": data.get("latitude", config.LAT),
+                "longitude": data.get("longitude", config.LON),
+            },
+            "timestamp": data.get("timestamp"),
+            "building_id": "SF001",
+            "label": "Agua Caliente Solar Project",
+            "peak_t_ambient": round(peak_t_ambient, 2),
+            "peak_ghi": round(peak_ghi, 2),
+            "t_roof": round(t_roof, 2),
+            "apparent_temperature_celsius": round(peak_t_ambient, 2),
+            "ghi": round(peak_ghi, 2),
+            "wind_speed": 2.0,
+            "albedo": 0.12,
+            "rated_kw": 290000.0,
+            "monthly_loss_usd": metrics["monthly_dollar_loss"],
+            "annual_loss_usd": metrics["annual_dollar_loss"],
+            "hourly_dollar_loss": metrics["hourly_dollar_loss"],
+            "efficiency_loss_pct": metrics["efficiency_loss_pct"],
+            "loss_pct": metrics["loss_pct"],
+            "t_cell": metrics["t_cell"],
+            "temp_delta": metrics["temp_delta"],
+            "lost_kwh": metrics["lost_kwh"],
+            "expected_kwh": metrics["expected_kwh"],
+            "risk_score": metrics["risk_score"],
+            "pv_thermal_analysis": metrics,
+            "recommendations": recommendations,
+            "raw_fortyguard": {
+                "apparent_temperature_celsius": data.get("apparent_temperature_celsius"),
+                "heat_index_celsius": data.get("heat_index_celsius"),
+                "wet_bulb_temperature_celsius": data.get("wet_bulb_temperature_celsius"),
+                "relative_humidity_percent": data.get("relative_humidity_percent"),
+                "solar_clearsky": data.get("solar_clearsky"),
+                "summary": data.get("summary"),
+                "hourly_timeseries": hourly,
+            },
+        })
+    except Exception as exc:
+        return jsonify({"error": str(exc)}), 500
+
+
+@bp.post("/refresh-data")
+def refresh_data():
+    """Run fetch_fortyguard.py as a subprocess to refresh live FortyGuard data."""
+    import subprocess
+    import config
+
+    fetch_script = Path(config.BASE_DIR) / "data" / "fetch_fortyguard.py"
+    try:
+        proc = subprocess.run(
+            [sys.executable, str(fetch_script)],
+            capture_output=True,
+            text=True,
+            timeout=120,
+            cwd=str(config.BASE_DIR),
+        )
+        if proc.returncode != 0:
+            return jsonify({
+                "status": "error",
+                "message": f"fetch_fortyguard.py failed with code {proc.returncode}",
+                "stderr": proc.stderr,
+                "stdout": proc.stdout,
+            }), 500
+
+        # Also rebuild dataset
+        build_script = Path(config.BASE_DIR) / "data" / "build_dataset.py"
+        subprocess.run([sys.executable, str(build_script)], capture_output=True, text=True, timeout=30, cwd=str(config.BASE_DIR))
+
+        # Return updated live metrics
+        return live_environmental()
+    except subprocess.TimeoutExpired:
+        return jsonify({"status": "error", "message": "FortyGuard API request timed out"}), 504
+    except Exception as exc:
+        return jsonify({"status": "error", "message": str(exc)}), 500
 
 
 @bp.post("/analyze")
@@ -96,11 +230,16 @@ def analyze():
         return jsonify({"error": str(exc)}), 400
 
     metrics = engine.calculate_thermal_metrics(**args)
+    b_id = body.get("id") or body.get("building_id")
+    recommendations = engine.rank_interventions(metrics["monthly_dollar_loss"], args.get("rated_kw", 1000.0))
     return jsonify({
         **metrics,
         "monthly_loss_usd": metrics["monthly_dollar_loss"],
-        "building_id": body.get("building_id"),
+        "annual_loss_usd": metrics["annual_dollar_loss"],
+        "building_id": b_id,
+        "id": b_id,
         "label": body.get("label"),
+        "recommendations": recommendations,
     })
 
 
@@ -198,3 +337,86 @@ def forecast():
         "horizon_days": len(days),
         "forecast": days,
     })
+
+
+@bp.route('/ai-recommend', methods=['POST'])
+def ai_recommend():
+    try:
+        data = request.get_json() or {}
+
+        building_label = data.get('building_label', 'Unknown')
+        rated_kw = data.get('rated_kw', 1000)
+        monthly_loss = data.get('monthly_loss_usd', 0)
+        annual_loss = data.get('annual_loss_usd', 0)
+        t_cell = data.get('t_cell', 0)
+        eff_loss = data.get('efficiency_loss_pct', 0)
+        risk_score = data.get('risk_score', 0)
+        mw = rated_kw / 1000
+
+        api_key = os.getenv('GROQ_API_KEY')
+        client = Groq(api_key=api_key)
+
+        prompt = f"""You are SolGrid AI, an expert solar 
+thermal engineer. Analyze this utility-scale solar farm:
+
+Farm: {building_label}
+Capacity: {mw:.0f} MW
+Panel cell temperature: {t_cell:.1f}°C (normal is 25°C)
+Efficiency loss: {eff_loss*100:.1f}%
+Monthly revenue loss: ${monthly_loss:,.0f}
+Annual revenue loss: ${annual_loss:,.0f}
+Risk score: {risk_score:.0f}/100
+
+Give a sharp, technical analysis with:
+1. ROOT CAUSE: Why is this farm losing so much?
+2. QUICK WIN (under $500k, implement in 30 days)
+3. BEST ROI INVESTMENT (12-24 month payback)
+4. LONG TERM STRATEGY (3-5 year capital plan)
+5. EXECUTIVE SUMMARY (one sentence for the asset owner)
+
+Be specific with numbers and dollar figures.
+Keep total response under 400 words."""
+
+        models_to_try = ["llama-3.1-8b-instant", "openai/gpt-oss-120b", "openai/gpt-oss-20b", "qwen/qwen3.6-27b"]
+        response = None
+        used_model = "llama-3.1-8b-instant"
+        for m in models_to_try:
+            try:
+                response = client.chat.completions.create(
+                    model=m,
+                    messages=[
+                        {
+                            "role": "system",
+                            "content": "You are SolGrid AI, an expert "
+                                       "solar thermal engineer and "
+                                       "financial analyst. Be concise, "
+                                       "technical, and ROI-focused."
+                        },
+                        {"role": "user", "content": prompt}
+                    ],
+                    max_tokens=500,
+                    temperature=0.3
+                )
+                used_model = m
+                break
+            except Exception as model_err:
+                if "model" in str(model_err).lower() or "404" in str(model_err):
+                    continue
+                raise model_err
+
+        if response is None:
+            raise RuntimeError("No compatible Groq chat model available.")
+
+        recommendation = response.choices[0].message.content
+
+        return jsonify({
+            "recommendation": recommendation,
+            "model": used_model,
+            "status": "success"
+        })
+
+    except Exception as e:
+        return jsonify({
+            "recommendation": f"AI analysis unavailable: {str(e)}",
+            "status": "error"
+        }), 200

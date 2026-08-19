@@ -18,7 +18,7 @@ const fs = require('fs');
     await page.goto('http://localhost:8080', { waitUntil: 'networkidle2' });
     await new Promise(r => setTimeout(r, 2000));
 
-    const artifactDir = `C:\\Users\\jjdcr\\.gemini\\antigravity-cli\\brain\\bbc202f4-0bbc-439d-a7ae-d4057362389a`;
+    const artifactDir = `C:\\Users\\jjdcr\\.gemini\\antigravity-cli\\brain\\ee38460c-361b-4cce-b260-b1e6cb9e8d69`;
     if (!fs.existsSync(artifactDir)) {
       fs.mkdirSync(artifactDir, { recursive: true });
     }

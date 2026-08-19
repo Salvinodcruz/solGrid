@@ -108,6 +108,7 @@ class SolGridEngine:
         lost_kwh = expected_kwh * loss_pct
         hourly_dollar_loss = lost_kwh * self.electricity_rate_usd
         monthly_dollar_loss = hourly_dollar_loss * PEAK_HOURS_PER_DAY * DAYS_PER_MONTH
+        annual_dollar_loss = monthly_dollar_loss * 12.0
 
         risk_score = min(100.0, (
             0.45 * min(t_roof / 65.0, 1.0)
@@ -132,6 +133,8 @@ class SolGridEngine:
             "lost_kwh": round(lost_kwh, 2),
             "hourly_dollar_loss": round(hourly_dollar_loss, 2),
             "monthly_dollar_loss": round(monthly_dollar_loss, 2),
+            "annual_dollar_loss": round(annual_dollar_loss, 2),
+            "annual_loss_usd": round(annual_dollar_loss, 2),
             "risk_score": round(risk_score, 2),
         }
 
@@ -303,3 +306,128 @@ class SolGridEngine:
             "buildings_funded": len(allocated),
             "buildings_skipped": len(candidates) - len(allocated),
         }
+
+    def calculate_live_pv_metrics(self, data=None, rated_kw=None, albedo=0.20, wind_speed=2.0):
+        """Recalculate PV panel thermal degradation and real-time efficiency from processed FortyGuard data."""
+        import json
+        from pathlib import Path
+        import config
+
+        if data is None:
+            path = getattr(config, "PROCESSED_FORTYGUARD_PATH", config.DATA_DIR / "processed_fortyguard.json")
+            if not Path(path).exists():
+                raise FileNotFoundError(f"Processed FortyGuard data not found at {path}. Run data/fetch_fortyguard.py first.")
+            data = json.loads(Path(path).read_text(encoding="utf-8"))
+
+        kw = float(rated_kw if rated_kw is not None else self.panel_capacity_kw)
+        t_amb = float(data.get("apparent_temperature_celsius") or data.get("t_ambient", 40.0))
+        ghi = float(data.get("ghi") or (data.get("solar_clearsky", {}).get("ghi", 950.0)))
+
+        live_metrics = self.calculate_thermal_metrics(
+            t_ambient=t_amb,
+            ghi=ghi,
+            wind_speed=wind_speed,
+            albedo=albedo,
+            rated_kw=kw,
+        )
+
+        hourly_series = data.get("hourly_timeseries", {})
+        hourly_profiles = []
+        if "apparent_temperature_celsius" in hourly_series and "timestamps" in hourly_series:
+            temps = hourly_series["apparent_temperature_celsius"]
+            times = hourly_series["timestamps"]
+            for ts, t in zip(times, temps):
+                h_metrics = self.calculate_thermal_metrics(
+                    t_ambient=t,
+                    ghi=ghi,
+                    wind_speed=wind_speed,
+                    albedo=albedo,
+                    rated_kw=kw,
+                )
+                hourly_profiles.append({
+                    "timestamp": ts,
+                    "apparent_temperature_celsius": t,
+                    "t_cell": h_metrics["t_cell"],
+                    "efficiency_loss_pct": h_metrics["efficiency_loss_pct"],
+                    "hourly_dollar_loss": h_metrics["hourly_dollar_loss"],
+                    "risk_score": h_metrics["risk_score"],
+                })
+
+        return {
+            "source": "FortyGuard Environmental API",
+            "last_updated": data.get("timestamp"),
+            "location": {
+                "city": data.get("city", config.CITY),
+                "state": data.get("state", config.STATE),
+                "latitude": data.get("latitude", config.LAT),
+                "longitude": data.get("longitude", config.LON),
+            },
+            "environmental_parameters": {
+                "apparent_temperature_celsius": data.get("apparent_temperature_celsius"),
+                "heat_index_celsius": data.get("heat_index_celsius"),
+                "wet_bulb_temperature_celsius": data.get("wet_bulb_temperature_celsius"),
+                "relative_humidity_percent": data.get("relative_humidity_percent"),
+            },
+            "solar_clearsky": data.get("solar_clearsky", {"ghi": ghi}),
+            "pv_thermal_analysis": live_metrics,
+            "hourly_profiles": hourly_profiles,
+        }
+
+    def rank_interventions(self, monthly_loss_usd, rated_kw):
+        mw = rated_kw / 1000
+
+        interventions = [
+            {
+                "name": "Utility Reflective Coating Program",
+                "description": "High-albedo coating across all "
+                              "panel surfaces and inter-row ground. "
+                              "Reduces site thermal load.",
+                "est_cost_usd": round(mw * 8500),
+                "monthly_saving_pct": 0.18,
+                "type": "coating"
+            },
+            {
+                "name": "Automated Misting Grid",
+                "description": "Evaporative cooling grid across "
+                              "panel rows, activated 10am-4pm. "
+                              "Reduces cell temp by 6-10C.",
+                "est_cost_usd": round(mw * 12000),
+                "monthly_saving_pct": 0.25,
+                "type": "misting"
+            },
+            {
+                "name": "Smart Panel Tilt Optimization",
+                "description": "AI-driven tilt angle adjustment "
+                              "to maximize inter-row airflow "
+                              "during peak heat hours.",
+                "est_cost_usd": round(mw * 3500),
+                "monthly_saving_pct": 0.10,
+                "type": "tilt"
+            },
+            {
+                "name": "Perimeter Windbreak Planting",
+                "description": "Strategic vegetation to reduce "
+                              "thermal load naturally. "
+                              "15-20 year compounding benefit.",
+                "est_cost_usd": round(mw * 5000),
+                "monthly_saving_pct": 0.08,
+                "type": "vegetation"
+            }
+        ]
+
+        for i in interventions:
+            monthly_saving = monthly_loss_usd * i["monthly_saving_pct"]
+            i["monthly_saving_usd"] = round(monthly_saving, 2)
+            i["annual_saving_usd"] = round(monthly_saving * 12, 2)
+            i["payback_months"] = round(
+                i["est_cost_usd"] / monthly_saving, 1
+            ) if monthly_saving > 0 else 999
+            i["payback_years"] = round(i["payback_months"] / 12, 1)
+            i["roi_5yr"] = round(
+                (monthly_saving * 60 - i["est_cost_usd"]) /
+                i["est_cost_usd"] * 100, 1
+            )
+
+        return sorted(interventions, 
+                      key=lambda x: x["payback_months"])
+

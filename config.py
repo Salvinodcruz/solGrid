@@ -30,13 +30,15 @@ ELECTRICITY_RATE_USD = 0.12  # USD per kWh
 # API credentials
 FORTYGUARD_API_KEY = os.getenv("FORTYGUARD_API_KEY")
 NREL_API_KEY = os.getenv("NREL_API_KEY")
+GROQ_API_KEY = os.getenv("GROQ_API_KEY")
 
 # API endpoints
-FORTYGUARD_URL = "https://api.fortyguard.com/v1/heat-intelligence"
+FORTYGUARD_URL = "https://api.fortyguard.com/v1/environmental-parameters"
 NREL_URL = "https://developer.nrel.gov/api/solar/solar_resource/v1.json"
 
 # Data artifacts
 RAW_FORTYGUARD_PATH = DATA_DIR / "raw_fortyguard.json"
+PROCESSED_FORTYGUARD_PATH = DATA_DIR / "processed_fortyguard.json"
 RAW_NREL_PATH = DATA_DIR / "raw_nrel.json"
 DATASET_PATH = DATA_DIR / "phoenix_solar_dataset.csv"
 

@@ -17,16 +17,16 @@ const puppeteer = require('puppeteer');
   let monthlyLoss = await page.$eval('#monthly-loss-display', el => el.textContent);
   let effLoss = await page.$eval('#efficiency-loss-display', el => el.textContent);
   let panelTemp = await page.$eval('#panel-temp-display', el => el.textContent);
-  let simNewTemp = await page.$eval('#sim-new-temp', el => el.textContent);
-  let simRecovered = await page.$eval('#sim-recovered-usd', el => el.textContent);
+  let simAfterTemp = await page.$eval('#sim-after-temp', el => el.textContent);
+  let simSavedDiff = await page.$eval('#sim-saved-diff', el => el.textContent);
 
   console.log('Building Name:', bName);
   console.log('Risk Badge:', riskBadge);
   console.log('Monthly Loss:', monthlyLoss);
   console.log('Efficiency Loss:', effLoss);
   console.log('Panel Temp:', panelTemp);
-  console.log('Sim New Temp:', simNewTemp);
-  console.log('Sim Recovered:', simRecovered);
+  console.log('Sim After Temp:', simAfterTemp);
+  console.log('Sim Saved Diff:', simSavedDiff);
 
   console.log('\n--- 2. MARKER CLICK (Building #2: 88 W Jefferson St) ---');
   const markers = await page.$$('.custom-marker');
@@ -51,21 +51,21 @@ const puppeteer = require('puppeteer');
 
   console.log('\n--- 3. SLIDER INTERACTION (Misting Intensity -> 0.6) ---');
   await page.evaluate(() => {
-    const misting = document.getElementById('slider-misting');
-    misting.value = 0.6;
-    misting.dispatchEvent(new Event('input', { bubbles: true }));
+    const mistingSlider = document.getElementById('slider-misting');
+    mistingSlider.value = 0.6;
+    mistingSlider.dispatchEvent(new Event('input', { bubbles: true }));
   });
-  await new Promise(r => setTimeout(r, 800));
+  await new Promise(r => setTimeout(r, 1000));
 
-  simNewTemp = await page.$eval('#sim-new-temp', el => el.textContent);
-  let simTempDrop = await page.$eval('#sim-temp-drop', el => el.textContent);
-  simRecovered = await page.$eval('#sim-recovered-usd', el => el.textContent);
-  let pbMisting = await page.$eval('#payback-misting', el => el.textContent);
+  const afterTemp = await page.$eval('#sim-after-temp', el => el.textContent);
+  const tempDiff = await page.$eval('#sim-temp-diff', el => el.textContent);
+  const savedDiff = await page.$eval('#sim-saved-diff', el => el.textContent);
+  const paybackMisting = await page.$eval('#payback-misting', el => el.textContent);
 
-  console.log('New Cell Temp:', simNewTemp);
-  console.log('Temp Drop:', simTempDrop);
-  console.log('Recovered USD:', simRecovered);
-  console.log('Payback Misting:', pbMisting);
+  console.log('New Cell Temp:', afterTemp);
+  console.log('Temp Drop:', tempDiff);
+  console.log('Recovered USD:', savedDiff);
+  console.log('Payback Misting:', paybackMisting);
 
   console.log('\n--- 4. FORECAST CHART & ROI ALLOCATION ---');
   const hasPlotly = await page.evaluate(() => {

@@ -1,76 +1,62 @@
-/**
- * Heatmap layer logic for SolGrid Thermal Sync
- */
-
 function addHeatmapLayer(map, buildings) {
-  if (!map || typeof map.addSource !== 'function') return;
+  const features = buildings.map(b => ({
+    type: 'Feature',
+    properties: {
+      risk: b.risk,
+      weight: b.risk / 100,
+      label: b.label,
+      rated_kw: b.rated_kw
+    },
+    geometry: {
+      type: 'Point',
+      coordinates: b.coordinates
+    }
+  }));
 
   const geojson = {
     type: 'FeatureCollection',
-    features: buildings.map(b => ({
-      type: 'Feature',
-      geometry: {
-        type: 'Point',
-        coordinates: [b.lng, b.lat]
-      },
-      properties: {
-        risk_score: b.risk_score || b.risk || 50,
-        label: b.label
-      }
-    }))
+    features: features
   };
 
-  const sourceId = 'thermal-heatmap-source';
-  const layerId = 'thermal-heatmap-layer';
-
-  if (map.getSource(sourceId)) {
-    map.getSource(sourceId).setData(geojson);
-  } else {
-    map.addSource(sourceId, {
-      type: 'geojson',
-      data: geojson
-    });
+  if (map.getSource('farms-heat')) {
+    map.getSource('farms-heat').setData(geojson);
+    return;
   }
 
-  if (!map.getLayer(layerId)) {
-    map.addLayer({
-      id: layerId,
-      type: 'heatmap',
-      source: sourceId,
-      maxzoom: 18,
-      paint: {
-        // Increase heatmap weight based on risk_score (0 - 100)
-        'heatmap-weight': [
-          'interpolate',
-          ['linear'],
-          ['get', 'risk_score'],
-          0, 0,
-          100, 1
-        ],
-        // Intensity scaling by zoom level
-        'heatmap-intensity': [
-          'interpolate',
-          ['linear'],
-          ['zoom'],
-          0, 1,
-          15, 3
-        ],
-        // Color scale: blue (low) -> yellow (mid) -> red (high)
-        'heatmap-color': [
-          'interpolate',
-          ['linear'],
-          ['heatmap-density'],
-          0, 'rgba(0,0,255,0)',
-          0.2, 'rgba(37, 99, 235, 0.6)',   // Blue (low)
-          0.5, 'rgba(234, 179, 8, 0.8)',   // Yellow (mid)
-          0.8, 'rgba(249, 115, 22, 0.9)',  // Orange
-          1, 'rgba(239, 68, 68, 1)'        // Red (high)
-        ],
-        // Radius of influence: 60px
-        'heatmap-radius': 60,
-        // Opacity
-        'heatmap-opacity': 0.75
-      }
-    });
-  }
+  map.addSource('farms-heat', {
+    type: 'geojson',
+    data: geojson
+  });
+
+  map.addLayer({
+    id: 'farms-heat-layer',
+    type: 'heatmap',
+    source: 'farms-heat',
+    paint: {
+      'heatmap-weight': [
+        'interpolate', ['linear'],
+        ['get', 'weight'],
+        0, 0, 1, 1
+      ],
+      'heatmap-intensity': 1.5,
+      'heatmap-color': [
+        'interpolate', ['linear'],
+        ['heatmap-density'],
+        0,   'rgba(30,64,175,0)',
+        0.15,'rgba(59,130,246,0.5)',
+        0.35,'rgba(34,197,94,0.7)',
+        0.55,'rgba(234,179,8,0.8)',
+        0.75,'rgba(249,115,22,0.9)',
+        1,   'rgba(239,68,68,1)'
+      ],
+      'heatmap-radius': [
+        'interpolate', ['linear'],
+        ['zoom'],
+        4, 60,
+        7, 120,
+        10, 200
+      ],
+      'heatmap-opacity': 0.75
+    }
+  });
 }

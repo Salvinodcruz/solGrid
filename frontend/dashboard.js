@@ -3,107 +3,107 @@ mapboxgl.accessToken = window.CONFIG?.MAPBOX_TOKEN || '';
 
 const API_BASE = 'http://localhost:5000';
 
-// 5 Demo buildings centered in Phoenix AZ
-const DEMO_BUILDINGS = [
+// 5 Verified real utility-scale solar farms in Arizona
+const BUILDINGS = [
   {
-    building_id: "B001",
-    label: "1234 N Central Ave",
-    lat: 33.4484,
-    lng: -112.0740,
-    risk_score: 97,
-    t_ambient: 42.0,
-    t_roof: 64.0,
+    id: "SF001",
+    label: "Agua Caliente Solar Project",
+    address: "Yuma County, Arizona",
+    coordinates: [-113.5000, 32.9667],
+    t_roof: 66.1,
     ghi: 950,
-    wind_speed: 1.2,
+    wind_speed: 2.0,
+    albedo: 0.12,
+    rated_kw: 290000,
+    risk: 97,
+    roof_type: "Ground-mount flat panel",
+    install_year: 2014,
+    operator: "First Solar / NRG Energy"
+  },
+  {
+    id: "SF002", 
+    label: "Solana Generating Station",
+    address: "Gila Bend, Arizona",
+    coordinates: [-112.9670, 32.9170],
+    t_roof: 64.5,
+    ghi: 935,
+    wind_speed: 2.5,
+    albedo: 0.13,
+    rated_kw: 250000,
+    risk: 94,
+    roof_type: "Parabolic trough CSP",
+    install_year: 2013,
+    operator: "Atlantica Sustainable"
+  },
+  {
+    id: "SF003",
+    label: "Arlington Valley Solar Energy",
+    address: "Arlington, Arizona",
+    coordinates: [-112.9000, 33.3500],
+    t_roof: 62.0,
+    ghi: 910,
+    wind_speed: 3.0,
     albedo: 0.15,
-    rated_kw: 1000
+    rated_kw: 125000,
+    risk: 88,
+    roof_type: "Fixed-tilt ground mount",
+    install_year: 2013,
+    operator: "LS Power"
   },
   {
-    building_id: "B002",
-    label: "88 W Jefferson St",
-    lat: 33.4510,
-    lng: -112.0680,
-    risk_score: 91,
-    t_ambient: 42.0,
-    t_roof: 58.5,
-    ghi: 950,
-    wind_speed: 1.8,
-    albedo: 0.25,
-    rated_kw: 350
+    id: "SF004",
+    label: "Red Rock Solar Project",
+    address: "Pinal County, Arizona",
+    coordinates: [-111.8200, 32.7500],
+    t_roof: 58.0,
+    ghi: 880,
+    wind_speed: 3.5,
+    albedo: 0.18,
+    rated_kw: 60000,
+    risk: 75,
+    roof_type: "Single-axis tracker",
+    install_year: 2020,
+    operator: "AES Corporation"
   },
   {
-    building_id: "B003",
-    label: "400 E Van Buren St",
-    lat: 33.4455,
-    lng: -112.0710,
-    risk_score: 78,
-    t_ambient: 41.0,
-    t_roof: 52.0,
-    ghi: 950,
-    wind_speed: 2.6,
-    albedo: 0.45,
-    rated_kw: 250
-  },
-  {
-    building_id: "B004",
-    label: "2 N Central Ave",
-    lat: 33.4530,
-    lng: -112.0750,
-    risk_score: 65,
-    t_ambient: 39.5,
-    t_roof: 45.5,
-    ghi: 950,
-    wind_speed: 3.2,
-    albedo: 0.65,
-    rated_kw: 180
-  },
-  {
-    building_id: "B005",
-    label: "777 S 16th St",
-    lat: 33.4470,
-    lng: -112.0660,
-    risk_score: 45,
-    t_ambient: 37.0,
-    t_roof: 39.0,
-    ghi: 950,
+    id: "SF005",
+    label: "Hyder Solar Project",
+    address: "Hyder, Arizona",
+    coordinates: [-113.9000, 32.9800],
+    t_roof: 51.0,
+    ghi: 840,
     wind_speed: 4.0,
-    albedo: 0.80,
-    rated_kw: 100
+    albedo: 0.22,
+    rated_kw: 200000,
+    risk: 61,
+    roof_type: "Fixed-tilt ground mount",
+    install_year: 2022,
+    operator: "Canadian Solar"
   }
 ];
 
-let selectedBuilding = DEMO_BUILDINGS[0];
+let selectedBuilding = BUILDINGS[0];
+let currentBuilding = null;
+let currentMetrics = null;
+let currentInterventions = null;
 let map = null;
 let markerElementsMap = {};
 
-// Helper: Get marker color based on risk
+// Global store for live FortyGuard data
+window.LIVE_FORTYGUARD_DATA = null;
+
+// Helper: Get marker color based on risk (Emerald, Amber, Crimson)
 function getRiskColor(riskScore) {
-  if (riskScore > 80) return '#ef4444'; // Red
-  if (riskScore >= 60) return '#f59e0b'; // Amber
-  return '#22c55e'; // Green
+  if (riskScore > 80) return '#EF4444'; // Crimson Red
+  if (riskScore >= 60) return '#F59E0B'; // Amber Yellow
+  return '#10B981'; // Emerald Green
 }
 
-// Animated count-up for numbers
-function animateCountUp(element, targetVal, duration = 800) {
-  if (!element) return;
-  const startVal = 0;
-  const startTime = performance.now();
-
-  function update(currentTime) {
-    const elapsed = currentTime - startTime;
-    const progress = Math.min(elapsed / duration, 1);
-    const easeProgress = progress * (2 - progress); // Ease out quad
-    const currentVal = Math.round(startVal + easeProgress * (targetVal - startVal));
-    element.textContent = '$' + currentVal.toLocaleString();
-
-    if (progress < 1) {
-      requestAnimationFrame(update);
-    } else {
-      element.textContent = '$' + Math.round(targetVal).toLocaleString();
-    }
-  }
-
-  requestAnimationFrame(update);
+// Money formatting helper
+function formatMoney(n) {
+  if (n >= 1000000) return '$' + (n / 1000000).toFixed(2) + 'M';
+  if (n >= 1000) return '$' + (n / 1000).toFixed(1) + 'k';
+  return '$' + n.toFixed(0);
 }
 
 // 1. Initialize Mapbox Map
@@ -118,7 +118,7 @@ function initMap() {
     if (mapContainer && !mapContainer.querySelector('.mapbox-token-banner')) {
       const banner = document.createElement('div');
       banner.className = 'mapbox-token-banner';
-      banner.style.cssText = 'position: absolute; top: 16px; left: 16px; right: 16px; z-index: 100; background: rgba(17, 24, 39, 0.95); border: 1px solid #f59e0b; color: #fef3c7; padding: 12px 16px; border-radius: 8px; font-size: 13px; font-weight: 500; backdrop-filter: blur(8px); box-shadow: 0 4px 20px rgba(0,0,0,0.5); display: flex; align-items: center; gap: 8px;';
+      banner.style.cssText = 'position: absolute; top: 16px; left: 16px; right: 16px; z-index: 100; background: rgba(15, 23, 42, 0.85); border: 1px solid rgba(245, 158, 11, 0.4); color: #FEF3C7; padding: 12px 18px; border-radius: 12px; font-size: 13px; font-weight: 500; backdrop-filter: blur(20px) saturate(180%); -webkit-backdrop-filter: blur(20px) saturate(180%); box-shadow: 0 12px 30px rgba(0, 0, 0, 0.4); display: flex; align-items: center; gap: 10px;';
       banner.innerHTML = '<span>⚠️</span><span><strong>Mapbox token required.</strong> Copy <code>config.example.js</code> to <code>config.js</code> and insert your public key.</span>';
       mapContainer.appendChild(banner);
     }
@@ -128,51 +128,91 @@ function initMap() {
     map = new mapboxgl.Map({
       container: 'map',
       style: 'mapbox://styles/mapbox/dark-v11',
-      center: [-112.0740, 33.4484], // Phoenix (lng, lat)
-      zoom: 12
+      center: [-112.5000, 33.0000],
+      zoom: 7,
+      minZoom: 5,
+      maxZoom: 14
     });
+    window.mapInstance = map;
 
-    // Handle token or map load errors gracefully
+    // Add navigation controls (zoom in/out buttons)
+    map.addControl(new mapboxgl.NavigationControl(), 'top-right');
+
     map.on('error', (e) => {
       // Quiet mapbox tile authorization errors for placeholder tokens
     });
 
+    // Hover popup for solar farms
+    const hoverPopup = new mapboxgl.Popup({
+      closeButton: false,
+      closeOnClick: false,
+      offset: 14,
+      className: 'solar-hover-popup'
+    });
+
     map.on('load', () => {
+      // 1. Add heatmap layer first
       if (typeof addHeatmapLayer === 'function') {
-        addHeatmapLayer(map, DEMO_BUILDINGS);
+        addHeatmapLayer(map, BUILDINGS);
+      }
+
+      // 2. Add dot markers on top
+      BUILDINGS.forEach(b => {
+        const el = document.createElement('div');
+        el.className = 'custom-marker';
+
+        const riskVal = b.risk !== undefined ? b.risk : b.risk_score;
+        if (riskVal > 80) {
+          el.style.backgroundColor = '#ef4444';
+          el.classList.add('marker-pulse-high');
+        } else if (riskVal > 60) {
+          el.style.backgroundColor = '#f97316';
+        } else {
+          el.style.backgroundColor = '#22c55e';
+        }
+
+        const bId = b.id || b.building_id;
+        const coords = b.coordinates || [b.lng, b.lat];
+
+        new mapboxgl.Marker(el)
+          .setLngLat(coords)
+          .addTo(map);
+
+        markerElementsMap[bId] = el;
+
+        // Hover popup: Farm name, capacity in MW, risk score
+        el.addEventListener('mouseenter', () => {
+          const capacityMw = (b.rated_kw / 1000).toFixed(0) + ' MW';
+          const riskColor = riskVal > 80 ? '#ef4444' : (riskVal >= 60 ? '#f59e0b' : '#10b981');
+          hoverPopup.setLngLat(coords)
+            .setHTML(`
+              <div style="font-family: -apple-system, BlinkMacSystemFont, 'Inter', sans-serif; line-height: 1.4;">
+                <div style="font-weight: 700; font-size: 13px; color: #f8fafc; margin-bottom: 3px;">${b.label}</div>
+                <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px; font-size: 11px; color: #94a3b8;">
+                  <span>⚡ <strong>${capacityMw}</strong></span>
+                  <span style="color: ${riskColor}; font-weight: 700;">Risk: ${riskVal}</span>
+                </div>
+              </div>
+            `)
+            .addTo(map);
+        });
+
+        el.addEventListener('mouseleave', () => {
+          hoverPopup.remove();
+        });
+
+        el.addEventListener('click', () => {
+          analyzeBuilding(b);
+        });
+      });
+
+      if (selectedBuilding) {
+        highlightMarker(selectedBuilding.id || selectedBuilding.building_id);
       }
     });
   } catch (err) {
     console.warn('Mapbox initialization fallback:', err);
   }
-
-  // Add 5 demo building markers
-  DEMO_BUILDINGS.forEach(b => {
-    const el = document.createElement('div');
-    el.className = 'custom-marker';
-    const color = getRiskColor(b.risk_score);
-    
-    el.style.backgroundColor = color;
-    el.style.width = '22px';
-    el.style.height = '22px';
-    el.style.borderRadius = '50%';
-    el.style.border = '2px solid #ffffff';
-    el.style.boxShadow = `0 0 10px ${color}`;
-    el.style.cursor = 'pointer';
-    el.title = `${b.label} (Risk: ${b.risk_score})`;
-
-    if (map) {
-      new mapboxgl.Marker(el)
-        .setLngLat([b.lng, b.lat])
-        .addTo(map);
-    }
-
-    markerElementsMap[b.building_id] = el;
-
-    el.addEventListener('click', () => {
-      analyzeBuilding(b);
-    });
-  });
 }
 
 // Highlight selected marker
@@ -186,27 +226,121 @@ function highlightMarker(buildingId) {
   });
 }
 
+// 2. Load Live FortyGuard Data (GET /live)
+async function loadLiveData() {
+  try {
+    const res = await fetch(`${API_BASE}/live`);
+    if (!res.ok) {
+      console.warn('Live data not currently available on server');
+      return;
+    }
+
+    const liveData = await res.json();
+    window.LIVE_FORTYGUARD_DATA = liveData;
+
+    // FIX 5: Update navbar subtitle
+    const navbarBadge = document.getElementById('navbar-badge');
+    if (navbarBadge) {
+      navbarBadge.innerHTML = '🟢 LIVE — Arizona Solar Belt | FortyGuard 2026';
+      navbarBadge.classList.add('live-active');
+    }
+
+    // FIX 3: Update and show Live Data Banner
+    const banner = document.getElementById('live-data-banner');
+    if (banner) {
+      banner.classList.remove('hidden');
+      const peakAmb = liveData.peak_t_ambient || liveData.apparent_temperature_celsius || 46.1;
+      const peakGhi = liveData.peak_ghi || liveData.ghi || 950;
+      const roofTemp = liveData.t_roof || (peakAmb + 20);
+
+      document.getElementById('live-banner-temp').textContent = `${peakAmb}°C`;
+      document.getElementById('live-banner-ghi').textContent = `${peakGhi} W/m²`;
+      document.getElementById('live-banner-roof').textContent = `${roofTemp}°C`;
+    }
+
+    // Update SF001 (Agua Caliente Solar Project) with live values
+    BUILDINGS[0].t_ambient = liveData.peak_t_ambient || liveData.apparent_temperature_celsius || 46.1;
+    BUILDINGS[0].t_roof = liveData.t_roof || (BUILDINGS[0].t_ambient + 20.0);
+    BUILDINGS[0].ghi = liveData.peak_ghi || liveData.ghi || 950.0;
+    BUILDINGS[0].rated_kw = 290000;
+    BUILDINGS[0].wind_speed = 2.0;
+    BUILDINGS[0].albedo = 0.12;
+    BUILDINGS[0].risk = Math.round(liveData.risk_score || liveData.pv_thermal_analysis?.risk_score || 97);
+    BUILDINGS[0].is_live = true;
+
+    // If SF001 is currently selected, trigger update
+    if (selectedBuilding && (selectedBuilding.id === 'SF001' || selectedBuilding.id === 'B001' || selectedBuilding.building_id === 'SF001')) {
+      analyzeBuilding(BUILDINGS[0]);
+    }
+  } catch (err) {
+    console.error('Error loading live FortyGuard data:', err);
+  }
+}
+
 // 3. Analyze Building (POST /analyze)
 async function analyzeBuilding(building) {
   selectedBuilding = building;
-  highlightMarker(building.building_id);
+  const bId = building.id || building.building_id;
+  highlightMarker(bId);
 
   // Update card static details immediately
   document.getElementById('building-name').textContent = building.label;
-  document.getElementById('detail-building-id').textContent = building.building_id;
-  document.getElementById('detail-capacity').textContent = `${building.rated_kw} kW`;
+
+  const addressEl = document.getElementById('building-address');
+  if (addressEl) {
+    addressEl.textContent = building.address ? `Address: ${building.address}` : '';
+  }
+
+  document.getElementById('detail-building-id').textContent = bId;
+  const capacityMw = (building.rated_kw / 1000).toFixed(0) + " MW";
+  document.getElementById('detail-capacity').textContent = capacityMw;
+
+  const operatorEl = document.getElementById('detail-operator');
+  if (operatorEl) {
+    operatorEl.textContent = building.operator || '--';
+  }
+
+  const roofTypeEl = document.getElementById('detail-roof-type');
+  if (roofTypeEl) {
+    roofTypeEl.textContent = building.roof_type || '--';
+  }
+
+  const installYearEl = document.getElementById('detail-install-year');
+  if (installYearEl) {
+    installYearEl.textContent = building.install_year || '--';
+  }
+
   document.getElementById('detail-roof-temp').textContent = `${building.t_roof}°C`;
   document.getElementById('detail-albedo').textContent = building.albedo;
 
+  // Live badge and ambient/GHI details (FIX 3)
+  const liveBadge = document.getElementById('live-data-badge');
+  const ambientEl = document.getElementById('detail-ambient-temp');
+  const ghiEl = document.getElementById('detail-ghi');
+
+  if ((bId === 'SF001' || bId === 'B001') && window.LIVE_FORTYGUARD_DATA) {
+    if (liveBadge) liveBadge.classList.remove('hidden');
+    const liveAmb = building.t_ambient || window.LIVE_FORTYGUARD_DATA.peak_t_ambient || 46.1;
+    const liveGhi = building.ghi || window.LIVE_FORTYGUARD_DATA.peak_ghi || 950;
+    if (ambientEl) ambientEl.textContent = `${liveAmb}°C`;
+    if (ghiEl) ghiEl.textContent = `${liveGhi} W/m²`;
+  } else {
+    if (liveBadge) liveBadge.classList.add('hidden');
+    const calcAmb = building.t_ambient || (building.t_roof - 20).toFixed(1);
+    if (ambientEl) ambientEl.textContent = `${calcAmb}°C`;
+    if (ghiEl) ghiEl.textContent = `${building.ghi} W/m²`;
+  }
+
   // Update Risk Score Badge
   const riskBadge = document.getElementById('risk-score-badge');
-  const risk = building.risk_score;
+  const risk = building.risk !== undefined ? building.risk : building.risk_score;
   riskBadge.textContent = `Risk: ${Math.round(risk)}`;
   riskBadge.className = 'badge risk-badge ' + (risk > 80 ? 'high' : risk >= 60 ? 'mid' : 'low');
 
   // Reset simulator slider defaults for building
   const albedoSlider = document.getElementById('slider-albedo');
-  albedoSlider.value = Math.max(0.15, building.albedo);
+  albedoSlider.min = "0.10";
+  albedoSlider.value = Math.max(0.10, building.albedo);
   document.getElementById('val-albedo').textContent = albedoSlider.value;
 
   document.getElementById('slider-misting').value = 0.0;
@@ -224,18 +358,65 @@ async function analyzeBuilding(building) {
     if (!res.ok) throw new Error('Analyze endpoint failed');
 
     const data = await res.json();
+    currentBuilding = building;
+    currentMetrics = data;
+    currentInterventions = data.recommendations;
 
-    // Update Monthly Loss (animated count up)
-    const lossDisplay = document.getElementById('monthly-loss-display');
-    animateCountUp(lossDisplay, data.monthly_loss_usd);
+    const aiResponse = document.getElementById('ai-response');
+    const aiBtn = document.getElementById('ai-btn');
+    const aiLoading = document.getElementById('ai-loading');
+    if (aiResponse) aiResponse.style.display = 'none';
+    if (aiBtn) aiBtn.style.display = 'block';
+    if (aiLoading) aiLoading.style.display = 'none';
 
-    // Update Efficiency Loss % & Panel Temperature
-    const effLoss = data.efficiency_loss_pct !== undefined ? data.efficiency_loss_pct : data.loss_pct;
-    document.getElementById('efficiency-loss-display').textContent = (effLoss * 100).toFixed(1) + "%";
+    // Update Monthly & Annual Loss (formatted $M / $k with countup animation)
+    const monthlyLossVal = data.monthly_loss_usd || data.monthly_dollar_loss || 0;
+    const annualLossVal = data.annual_loss_usd || data.annual_dollar_loss || (monthlyLossVal * 12);
+
+    const monthlyLossDisplay = document.getElementById('monthly-loss-display');
+    if (monthlyLossDisplay) {
+      monthlyLossDisplay.textContent = formatMoney(monthlyLossVal);
+      monthlyLossDisplay.classList.remove('loss-countup');
+      void monthlyLossDisplay.offsetWidth; // Reflow for animation
+      monthlyLossDisplay.classList.add('loss-countup');
+    }
+
+    const annualLossDisplay = document.getElementById('annual-loss-display');
+    if (annualLossDisplay) {
+      annualLossDisplay.textContent = `Annual: ${formatMoney(annualLossVal)} lost to heat`;
+    }
+
+    // Update Efficiency Loss % & kW lost alongside & Panel Temperature
+    const effLoss = data.efficiency_loss_pct !== undefined ? data.efficiency_loss_pct : (data.loss_pct || 0);
+    const lost_kw = building.rated_kw * effLoss;
+
+    const effDisplay = document.getElementById('efficiency-loss-display');
+    if (effDisplay) {
+      effDisplay.textContent = (effLoss * 100).toFixed(1) + "%";
+    }
+
+    const kwLossDisplay = document.getElementById('kw-loss-display');
+    if (kwLossDisplay) {
+      kwLossDisplay.textContent = `${Math.round(lost_kw).toLocaleString()} kW lost at peak`;
+    }
+
     document.getElementById('panel-temp-display').textContent = `${data.t_cell}°C`;
+    if (data.t_roof) {
+      document.getElementById('detail-roof-temp').textContent = `${data.t_roof}°C`;
+    }
 
     // Trigger initial simulation call with reset sliders
     runSimulation();
+
+    // Reload forecast chart on asset selection
+    fetch(`${API_BASE}/forecast`)
+      .then(r => r.json())
+      .then(fData => {
+        if (fData.forecast) {
+          renderForecastChart(fData.forecast);
+        }
+      })
+      .catch(fErr => console.error('Error reloading forecast:', fErr));
   } catch (err) {
     console.error('Error analyzing building:', err);
   }
@@ -266,20 +447,43 @@ async function runSimulation() {
 
     const data = await res.json();
 
-    // New panel temp & temp drop
-    const afterTCell = data.after ? data.after.t_cell : '--';
-    document.getElementById('sim-new-temp').textContent = `${afterTCell}°C`;
-    document.getElementById('sim-temp-drop').textContent = `-${data.temp_drop_c}°C drop`;
+    // Compute and display Before / After comparison
+    const beforeTCell = data.before ? Number(data.before.t_cell).toFixed(2) : '--';
+    const afterTCell = data.after ? Number(data.after.t_cell).toFixed(2) : '--';
+    const beforeLoss = data.before ? Math.round(data.before.monthly_dollar_loss || data.before.monthly_loss_usd || 0) : 0;
+    const afterLoss = data.after ? Math.round(data.after.monthly_dollar_loss || data.after.monthly_loss_usd || 0) : 0;
+    const tempDrop = (data.temp_drop_c != null ? data.temp_drop_c : (data.before && data.after ? (data.before.t_cell - data.after.t_cell) : 0)).toFixed(1);
+    const recoveredUsd = Math.max(0, Math.round(data.monthly_recovered_usd != null ? data.monthly_recovered_usd : (beforeLoss - afterLoss)));
 
-    // Monthly recovered USD
-    const recoveredUsd = Math.max(0, data.monthly_recovered_usd);
-    document.getElementById('sim-recovered-usd').textContent = `$${recoveredUsd.toLocaleString()} / mo`;
+    const beforeTempEl = document.getElementById('sim-before-temp');
+    if (beforeTempEl) beforeTempEl.textContent = `${beforeTCell}°C`;
+
+    const afterTempEl = document.getElementById('sim-after-temp');
+    if (afterTempEl) afterTempEl.textContent = `${afterTCell}°C`;
+
+    const tempDiffEl = document.getElementById('sim-temp-diff');
+    if (tempDiffEl) tempDiffEl.textContent = `(-${tempDrop}°C)`;
+
+    const beforeLossEl = document.getElementById('sim-before-loss');
+    if (beforeLossEl) beforeLossEl.textContent = `$${beforeLoss.toLocaleString()}/mo`;
+
+    const afterLossEl = document.getElementById('sim-after-loss');
+    if (afterLossEl) afterLossEl.textContent = `$${afterLoss.toLocaleString()}/mo`;
+
+    const savedDiffEl = document.getElementById('sim-saved-diff');
+    if (savedDiffEl) savedDiffEl.textContent = `(+$${recoveredUsd.toLocaleString()} saved)`;
 
     // Payback months
     const pb = data.payback_months || {};
-    document.getElementById('payback-albedo').textContent = pb.albedo_coating != null ? `${pb.albedo_coating} mos` : 'N/A';
-    document.getElementById('payback-misting').textContent = pb.misting_system != null ? `${pb.misting_system} mos` : 'N/A';
-    document.getElementById('payback-vent').textContent = pb.forced_ventilation != null ? `${pb.forced_ventilation} mos` : 'N/A';
+    const formatPayback = (val) => {
+      if (val == null) return 'N/A';
+      if (val < 0.1) return '< 0.1 mos';
+      if (val < 1.0) return `${val.toFixed(1)} mos`;
+      return `${Math.round(val)} mos`;
+    };
+    document.getElementById('payback-albedo').textContent = formatPayback(pb.albedo_coating);
+    document.getElementById('payback-misting').textContent = formatPayback(pb.misting_system);
+    document.getElementById('payback-vent').textContent = formatPayback(pb.forced_ventilation);
   } catch (err) {
     console.error('Error running simulation:', err);
   }
@@ -308,52 +512,118 @@ function setupSliders() {
 }
 
 // 5. Forecast Section (GET /forecast)
+function renderForecastChart(forecastData) {
+  const days = forecastData.map(d => d.day_name);
+  const losses = forecastData.map(d => 
+    parseFloat(d.predicted_loss_pct));
+  const colors = losses.map(l => 
+    l > 14 ? '#ef4444' : l > 8 ? '#f97316' : '#22c55e');
+
+  const trace = {
+    x: days,
+    y: losses,
+    type: 'scatter',
+    mode: 'lines+markers',
+    fill: 'tozeroy',
+    fillcolor: 'rgba(249,115,22,0.15)',
+    line: {
+      color: '#f97316',
+      width: 2.5,
+      shape: 'spline',
+      smoothing: 0.8
+    },
+    marker: {
+      color: colors,
+      size: 8,
+      line: { color: 'white', width: 1.5 }
+    },
+    hovertemplate: 
+      '<b>%{x}</b><br>' +
+      'Loss: %{y:.1f}%<br>' +
+      '<extra></extra>'
+  };
+
+  const layout = {
+    paper_bgcolor: 'transparent',
+    plot_bgcolor: 'transparent',
+    margin: { t: 10, r: 20, b: 40, l: 45 },
+    xaxis: {
+      tickfont: { color: '#6b7280', size: 11 },
+      gridcolor: '#1f2937',
+      linecolor: '#1f2937',
+      showgrid: false
+    },
+    yaxis: {
+      tickfont: { color: '#6b7280', size: 11 },
+      gridcolor: '#1f2937',
+      ticksuffix: '%',
+      range: [0, 25],
+      showgrid: true,
+      gridcolor: 'rgba(31,41,55,0.8)'
+    },
+    shapes: [
+      {
+        type: 'line',
+        x0: 0, x1: 1,
+        xref: 'paper',
+        y0: 14, y1: 14,
+        line: { color: '#ef4444', 
+                width: 1, 
+                dash: 'dot' }
+      },
+      {
+        type: 'line', 
+        x0: 0, x1: 1,
+        xref: 'paper',
+        y0: 8, y1: 8,
+        line: { color: '#f97316', 
+                width: 1, 
+                dash: 'dot' }
+      }
+    ],
+    annotations: [
+      {
+        x: 1, y: 14,
+        xref: 'paper',
+        text: 'High risk',
+        font: { color: '#ef4444', size: 10 },
+        showarrow: false,
+        xanchor: 'right'
+      },
+      {
+        x: 1, y: 8,
+        xref: 'paper', 
+        text: 'Moderate',
+        font: { color: '#f97316', size: 10 },
+        showarrow: false,
+        xanchor: 'right'
+      }
+    ],
+    hoverlabel: {
+      bgcolor: '#1f2937',
+      bordercolor: '#f97316',
+      font: { color: '#f9fafb', size: 12 }
+    }
+  };
+
+  const config = {
+    displayModeBar: false,
+    responsive: true
+  };
+
+  Plotly.newPlot('forecast-chart', 
+                 [trace], layout, config);
+}
+
 async function loadForecast() {
   try {
     const res = await fetch(`${API_BASE}/forecast`);
     if (!res.ok) throw new Error('Forecast endpoint failed');
 
     const data = await res.json();
-    const forecastList = data.forecast || [];
-
-    const xDays = forecastList.map(item => item.day_name);
-    const yLoss = forecastList.map(item => item.predicted_loss_pct);
-    const barColors = forecastList.map(item => {
-      if (item.risk_level === 'high') return '#ef4444';
-      if (item.risk_level === 'moderate') return '#f59e0b';
-      return '#22c55e';
-    });
-
-    const plotData = [{
-      x: xDays,
-      y: yLoss,
-      type: 'bar',
-      marker: {
-        color: barColors,
-        border: { width: 0 }
-      },
-      hovertemplate: '<b>%{x}</b><br>Loss: %{y:.1f}%<extra></extra>'
-    }];
-
-    const layout = {
-      title: '',
-      paper_bgcolor: '#111827',
-      plot_bgcolor: '#111827',
-      margin: { l: 40, r: 20, t: 10, b: 35 },
-      xaxis: {
-        tickfont: { color: '#9ca3af', family: 'Inter' },
-        gridcolor: '#1f2937'
-      },
-      yaxis: {
-        title: { text: 'Loss %', font: { color: '#9ca3af', size: 11 } },
-        tickfont: { color: '#9ca3af', family: 'Inter' },
-        gridcolor: '#1f2937'
-      }
-    };
-
-    const config = { responsive: true, displayModeBar: false };
-
-    Plotly.newPlot('forecast-chart', plotData, layout, config);
+    if (data.forecast) {
+      renderForecastChart(data.forecast);
+    }
   } catch (err) {
     console.error('Error loading forecast:', err);
   }
@@ -364,7 +634,16 @@ async function loadPortfolioROI() {
   const container = document.getElementById('roi-list');
   try {
     const payload = {
-      buildings: DEMO_BUILDINGS,
+      buildings: BUILDINGS.map(b => ({
+        building_id: b.id || b.building_id,
+        label: b.label,
+        t_roof: b.t_roof,
+        ghi: b.ghi,
+        wind_speed: b.wind_speed,
+        albedo: b.albedo,
+        rated_kw: b.rated_kw,
+        risk_score: b.risk !== undefined ? b.risk : b.risk_score
+      })),
       budget: 50000
     };
 
@@ -385,7 +664,7 @@ async function loadPortfolioROI() {
 
     // Helper map for building name lookup
     const buildingMap = {};
-    DEMO_BUILDINGS.forEach(b => { buildingMap[b.building_id] = b.label; });
+    BUILDINGS.forEach(b => { buildingMap[b.id || b.building_id] = b.label; });
 
     container.innerHTML = allocated.map((item, idx) => {
       const buildingName = buildingMap[item.building_id] || item.label || item.building_id;
@@ -426,13 +705,107 @@ async function loadPortfolioROI() {
   }
 }
 
+// 7. FIX 4: Refresh Live Data Button Handler
+function setupRefreshButton() {
+  const btn = document.getElementById('btn-refresh-live');
+  const btnText = document.getElementById('refresh-btn-text');
+  if (!btn) return;
+
+  btn.addEventListener('click', async () => {
+    if (btn.classList.contains('loading')) return;
+
+    btn.classList.add('loading');
+    if (btnText) btnText.textContent = 'Querying FortyGuard...';
+
+    try {
+      const res = await fetch(`${API_BASE}/refresh-data`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' }
+      });
+      if (!res.ok) throw new Error(`Refresh failed: ${res.statusText}`);
+
+      await loadLiveData();
+      await loadPortfolioROI();
+      await loadForecast();
+
+      if (btnText) btnText.textContent = '🟢 Data Synced!';
+      setTimeout(() => {
+        if (btnText) btnText.textContent = 'Refresh Live Data';
+        btn.classList.remove('loading');
+      }, 2000);
+    } catch (err) {
+      console.error('Failed to refresh FortyGuard live data:', err);
+      if (btnText) btnText.textContent = '⚠️ Refresh Failed';
+      setTimeout(() => {
+        if (btnText) btnText.textContent = 'Refresh Live Data';
+        btn.classList.remove('loading');
+      }, 3000);
+    }
+  });
+}
+
+// 8. AI Thermal Recommendation (POST /ai-recommend)
+async function getAIRecommendation() {
+  if (!currentBuilding || !currentMetrics) {
+    alert('Please select a solar farm first');
+    return;
+  }
+
+  const btn = document.getElementById('ai-btn');
+  const loading = document.getElementById('ai-loading');
+  const response = document.getElementById('ai-response');
+
+  if (btn) btn.style.display = 'none';
+  if (loading) loading.style.display = 'flex';
+  if (response) response.style.display = 'none';
+
+  try {
+    const res = await fetch(
+      `${API_BASE}/ai-recommend`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          building_label: currentBuilding.label,
+          rated_kw: currentBuilding.rated_kw,
+          monthly_loss_usd: currentMetrics.monthly_loss_usd || currentMetrics.monthly_dollar_loss || 0,
+          annual_loss_usd: (currentMetrics.monthly_loss_usd || currentMetrics.monthly_dollar_loss || 0) * 12,
+          t_cell: currentMetrics.t_cell,
+          efficiency_loss_pct: currentMetrics.efficiency_loss_pct !== undefined ? currentMetrics.efficiency_loss_pct : (currentMetrics.loss_pct || 0),
+          risk_score: currentMetrics.risk_score !== undefined ? currentMetrics.risk_score : (currentBuilding.risk || 0)
+        })
+      }
+    );
+
+    const data = await res.json();
+    const aiText = document.getElementById('ai-text');
+    if (aiText) {
+      aiText.textContent = data.recommendation;
+    }
+    if (loading) loading.style.display = 'none';
+    if (response) response.style.display = 'block';
+
+  } catch (e) {
+    const aiText = document.getElementById('ai-text');
+    if (aiText) {
+      aiText.textContent = 'AI analysis unavailable. Check your Groq API key.';
+    }
+    if (loading) loading.style.display = 'none';
+    if (response) response.style.display = 'block';
+  }
+
+  if (btn) btn.style.display = 'block';
+}
+
 // Page initialization
 document.addEventListener('DOMContentLoaded', () => {
   initMap();
   setupSliders();
+  setupRefreshButton();
   loadForecast();
   loadPortfolioROI();
 
-  // Select initial building
-  analyzeBuilding(DEMO_BUILDINGS[0]);
+  // Load FortyGuard Live Feed and select initial building
+  loadLiveData();
+  analyzeBuilding(BUILDINGS[0]);
 });

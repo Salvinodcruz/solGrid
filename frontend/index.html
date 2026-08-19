@@ -30,10 +30,19 @@
           <path d="M12 2V4M12 20V22M2 12H4M20 12H22M4.93 4.93L6.34 6.34M17.66 17.66L19.07 19.07M4.93 19.07L6.34 17.66M17.66 6.34L19.07 4.93" stroke="#f97316" stroke-width="2.5" stroke-linecap="round"/>
         </svg>
       </div>
-      <span class="logo-text">SolGrid <span class="logo-sub">Thermal Sync</span></span>
+      <div class="logo-text-group">
+        <span class="logo-text">SolGrid <span class="logo-sub">Thermal Sync</span></span>
+        <span class="logo-tagline">Utility-Scale Solar Thermal Intelligence</span>
+      </div>
     </div>
     <div class="navbar-right">
-      <span class="badge-tag">SonShield | FortyGuard 2026</span>
+      <button id="btn-refresh-live" class="btn-refresh" title="Query FortyGuard API for latest Arizona heat and solar data">
+        <svg class="refresh-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/>
+        </svg>
+        <span id="refresh-btn-text">Refresh Live Data</span>
+      </button>
+      <span id="navbar-badge" class="badge-tag">SonShield | FortyGuard 2026</span>
     </div>
   </header>
 
@@ -55,12 +64,41 @@
     <!-- Right Panel: Stacked Cards (60% width) -->
     <section class="controls-panel">
       
+      <!-- Live Data Banner -->
+      <div id="live-data-banner" class="live-data-banner hidden">
+        <div class="live-banner-left">
+          <div class="live-banner-title">
+            <strong><span class="live-dot"></span>LIVE DATA ACTIVE</strong>
+            <span class="live-banner-meta">Arizona Solar Belt • FortyGuard Heat & Solar API</span>
+          </div>
+        </div>
+        <div class="live-banner-stats">
+          <div class="live-stat-pill">
+            <span class="live-stat-label">Ambient Temp</span>
+            <span id="live-banner-temp" class="live-stat-val">--°C</span>
+          </div>
+          <div class="live-stat-pill">
+            <span class="live-stat-label">Solar GHI</span>
+            <span id="live-banner-ghi" class="live-stat-val">-- W/m²</span>
+          </div>
+          <div class="live-stat-pill">
+            <span class="live-stat-label">Surface Temp</span>
+            <span id="live-banner-roof" class="live-stat-val">--°C</span>
+          </div>
+        </div>
+      </div>
+
       <!-- 1. Building Info Card -->
       <article class="card building-card" id="building-card">
         <div class="card-header">
           <div>
-            <span class="card-subtitle">SELECTED ASSET</span>
-            <h2 id="building-name" class="card-title">Select a building on the map</h2>
+            <div class="card-subtitle-row">
+              <span class="card-subtitle section-accent-header">SELECTED ASSET</span>
+              <span class="badge asset-badge">Utility-Scale Solar Farm</span>
+              <span id="live-data-badge" class="badge live-badge hidden">Live FortyGuard data</span>
+            </div>
+            <h2 id="building-name" class="card-title">Select a solar farm on the map</h2>
+            <div id="building-address" class="building-address">Address: --</div>
           </div>
           <div id="risk-score-badge" class="badge risk-badge high">Risk: --</div>
         </div>
@@ -70,11 +108,31 @@
             <span id="detail-building-id" class="detail-value">--</span>
           </div>
           <div class="detail-item">
-            <span class="detail-label">Rated Capacity</span>
-            <span id="detail-capacity" class="detail-value">-- kW</span>
+            <span class="detail-label">Capacity</span>
+            <span id="detail-capacity" class="detail-value">-- MW</span>
           </div>
           <div class="detail-item">
-            <span class="detail-label">Roof Surface Temp</span>
+            <span class="detail-label">Operator</span>
+            <span id="detail-operator" class="detail-value">--</span>
+          </div>
+          <div class="detail-item">
+            <span class="detail-label">Mount Type</span>
+            <span id="detail-roof-type" class="detail-value">--</span>
+          </div>
+          <div class="detail-item">
+            <span class="detail-label">Commissioned</span>
+            <span id="detail-install-year" class="detail-value">--</span>
+          </div>
+          <div class="detail-item">
+            <span class="detail-label">Ambient Temp (API)</span>
+            <span id="detail-ambient-temp" class="detail-value">-- °C</span>
+          </div>
+          <div class="detail-item">
+            <span class="detail-label">Solar GHI (API)</span>
+            <span id="detail-ghi" class="detail-value">-- W/m²</span>
+          </div>
+          <div class="detail-item">
+            <span class="detail-label">Surface Temp</span>
             <span id="detail-roof-temp" class="detail-value">-- °C</span>
           </div>
           <div class="detail-item">
@@ -87,22 +145,24 @@
       <!-- 2. Thermal Loss Card -->
       <article class="card loss-card">
         <div class="card-header">
-          <span class="card-subtitle">THERMAL DEGRADATION & REVENUE IMPACT</span>
+          <span class="card-subtitle section-accent-header">THERMAL DEGRADATION & REVENUE IMPACT</span>
         </div>
         <div class="loss-metrics-row">
           <div class="big-loss-metric">
             <span class="metric-label">Estimated Monthly Loss</span>
-            <div class="big-number red-text" id="monthly-loss-display">$0</div>
-            <span class="metric-subtext">Direct revenue leakage due to heat penalty</span>
+            <div class="big-number red-text loss-countup" id="monthly-loss-display">$0</div>
+            <div id="annual-loss-display" class="annual-loss-text">Annual: $0 lost to heat</div>
           </div>
           <div class="secondary-loss-metrics">
             <div class="stat-box">
               <span class="stat-label">Efficiency Loss</span>
               <span id="efficiency-loss-display" class="stat-value danger-text">0.00%</span>
+              <span id="kw-loss-display" class="stat-subtext">0 kW lost at peak</span>
             </div>
             <div class="stat-box">
               <span class="stat-label">PV Cell Temp (NOCT)</span>
               <span id="panel-temp-display" class="stat-value">0.0°C</span>
+              <span class="stat-subtext">Operating cell temp</span>
             </div>
           </div>
         </div>
@@ -112,7 +172,7 @@
       <article class="card simulator-card">
         <div class="card-header">
           <div>
-            <h3 class="card-title">What-If Thermal Mitigation Simulator</h3>
+            <h3 class="card-title section-accent-header">What-If Thermal Mitigation Simulator</h3>
             <p class="card-description">Adjust cooling interventions to recalculate live efficiency recovery</p>
           </div>
         </div>
@@ -121,11 +181,11 @@
           <!-- Slider 1 -->
           <div class="slider-group">
             <div class="slider-header">
-              <label for="slider-albedo">Roof Albedo Coating</label>
-              <span id="val-albedo" class="slider-value">0.15</span>
+              <label for="slider-albedo">Surface Albedo Coating</label>
+              <span id="val-albedo" class="slider-value">0.12</span>
             </div>
-            <input type="range" id="slider-albedo" min="0.15" max="0.85" step="0.01" value="0.15">
-            <span class="slider-hint">Increases solar reflectance (0.15 standard dark roof to 0.85 ultra-white)</span>
+            <input type="range" id="slider-albedo" min="0.10" max="0.85" step="0.01" value="0.12">
+            <span class="slider-hint">Increases ground/surface reflectance (0.10 standard dark ground to 0.85 ultra-reflective)</span>
           </div>
 
           <!-- Slider 2 -->
@@ -149,16 +209,43 @@
           </div>
         </div>
 
-        <!-- Simulation Results Banner -->
-        <div class="sim-results-box">
-          <div class="sim-metric">
-            <span class="sim-label">New Cell Temperature</span>
-            <span id="sim-new-temp" class="sim-value">-- °C</span>
-            <span id="sim-temp-drop" class="sim-badge success-bg">-- °C drop</span>
+        <!-- Before / After Comparison Grid -->
+        <div class="sim-compare-container">
+          <div class="sim-compare-header">
+            <span class="compare-heading before-head">BEFORE</span>
+            <span class="compare-heading-spacer"></span>
+            <span class="compare-heading after-head">AFTER</span>
           </div>
-          <div class="sim-metric">
-            <span class="sim-label">Monthly Recovered USD</span>
-            <span id="sim-recovered-usd" class="sim-value success-text">$0 / mo</span>
+          <div class="sim-compare-grid">
+            <div class="compare-row">
+              <div class="compare-col before-col">
+                <span class="compare-label">Cell Temp</span>
+                <span id="sim-before-temp" class="compare-value text-muted-red">--°C</span>
+              </div>
+              <div class="compare-arrow">→</div>
+              <div class="compare-col after-col">
+                <span class="compare-label">Cell Temp</span>
+                <div class="compare-val-wrapper">
+                  <span id="sim-after-temp" class="compare-value text-green">--°C</span>
+                  <span id="sim-temp-diff" class="compare-delta delta-green">(-0.0°C)</span>
+                </div>
+              </div>
+            </div>
+
+            <div class="compare-row">
+              <div class="compare-col before-col">
+                <span class="compare-label">Monthly Loss</span>
+                <span id="sim-before-loss" class="compare-value text-muted-red">$0/mo</span>
+              </div>
+              <div class="compare-arrow">→</div>
+              <div class="compare-col after-col">
+                <span class="compare-label">Monthly Loss</span>
+                <div class="compare-val-wrapper">
+                  <span id="sim-after-loss" class="compare-value text-green">$0/mo</span>
+                  <span id="sim-saved-diff" class="compare-delta delta-green">(+$0 saved)</span>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
 
@@ -178,10 +265,40 @@
         </div>
       </article>
 
+      <!-- AI Thermal Advisor Section -->
+      <article class="card section" id="ai-section">
+        <div class="section-label section-accent-header">AI Thermal Advisor</div>
+        <div class="ai-powered-badge">
+          Powered by Llama 3.1 via Groq
+        </div>
+        <button id="ai-btn" onclick="getAIRecommendation()">
+          ✦ Analyze with SolGrid AI
+        </button>
+        <div id="ai-loading" 
+             style="display:none;align-items:center;
+                    gap:8px;padding:10px 0">
+          <div class="ai-spinner"></div>
+          <span style="font-size:12px;color:#6b7280">
+            SolGrid AI analyzing thermal data...
+          </span>
+        </div>
+        <div id="ai-response" style="display:none">
+          <div class="ai-header">
+            <span class="ai-badge">SolGrid AI</span>
+            <span class="ai-model">llama-3.1</span>
+          </div>
+          <div id="ai-text" class="ai-text"></div>
+          <button class="ai-refresh" 
+                  onclick="getAIRecommendation()">
+            ↻ Refresh analysis
+          </button>
+        </div>
+      </article>
+
       <!-- 4. 7-Day Forecast Chart -->
       <article class="card forecast-card">
         <div class="card-header">
-          <h3 class="card-title">7-Day Efficiency Forecast — Phoenix AZ</h3>
+          <h3 class="card-title section-accent-header">7-Day Efficiency Forecast — Arizona Solar Belt</h3>
         </div>
         <div id="forecast-chart" class="chart-container"></div>
       </article>
@@ -190,7 +307,7 @@
       <article class="card roi-card">
         <div class="card-header">
           <div>
-            <h3 class="card-title">Portfolio ROI Capital Allocation</h3>
+            <h3 class="card-title section-accent-header">Portfolio ROI Capital Allocation</h3>
             <p class="card-description">Optimal payback interventions ranked for $50,000 budget</p>
           </div>
           <div id="portfolio-budget-badge" class="badge info-badge">Budget: $50,000</div>
@@ -199,6 +316,11 @@
           <div class="loading-spinner">Loading capital allocation...</div>
         </div>
       </article>
+
+      <!-- Footer -->
+      <footer class="panel-footer">
+        Powered by FortyGuard Temperature API • NREL Solar Resource Data • SonShield © 2026
+      </footer>
 
     </section>
   </main>
