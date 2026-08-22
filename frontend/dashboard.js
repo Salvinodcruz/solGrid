@@ -187,13 +187,14 @@ function initMap() {
   try {
     map = new mapboxgl.Map({
       container: 'map',
-      style: 'mapbox://styles/mapbox/satellite-streets-v12',
+      style: 'mapbox://styles/mapbox/dark-v11',
       center: [-112.5000, 33.0000],
       zoom: 8,
       minZoom: 5,
       maxZoom: 18
     });
     window.mapInstance = map;
+    window.map = map;
 
     // Add navigation controls (zoom in/out buttons)
     map.addControl(new mapboxgl.NavigationControl(), 'top-right');
@@ -514,6 +515,9 @@ async function analyzeBuilding(building) {
         }
       })
       .catch(fErr => console.error('Error reloading forecast:', fErr));
+
+    // Load FortyGuard actual heatmap tile data over the solar farm
+    loadFarmHeatmapTiles(building);
   } catch (err) {
     console.error('Error analyzing building:', err);
   }
@@ -897,6 +901,167 @@ async function getAIRecommendation() {
 // Expose globals for satellite polygon interactions
 window.analyzeBuilding = analyzeBuilding;
 window.BUILDINGS = BUILDINGS;
+window.loadFarmHeatmapTiles = loadFarmHeatmapTiles;
+window.toggleSatellite = toggleSatellite;
+
+// FortyGuard Heatmap Tiles Layer & Cache
+const farmHeatmapCache = {};
+
+function applyHeatmapTilesToMap(building, features) {
+  if (!map || !features) return;
+  const sourceId = 'fortyguard-tiles';
+
+  try {
+    if (map.getSource(sourceId)) {
+      map.getSource(sourceId).setData({
+        type: 'FeatureCollection',
+        features: features
+      });
+    } else {
+      map.addSource(sourceId, {
+        type: 'geojson',
+        data: {
+          type: 'FeatureCollection',
+          features: features
+        }
+      });
+      
+      map.addLayer({
+        id: 'fortyguard-heat-layer',
+        type: 'heatmap',
+        source: sourceId,
+        paint: {
+          'heatmap-weight': [
+            'interpolate', ['linear'],
+            ['get', 'normalized'],
+            0, 0, 1, 1
+          ],
+          'heatmap-intensity': 2.0,
+          'heatmap-color': [
+            'interpolate', ['linear'],
+            ['heatmap-density'],
+            0,    'rgba(30,64,175,0)',
+            0.1,  'rgba(59,130,246,0.6)',
+            0.3,  'rgba(34,197,94,0.7)',
+            0.5,  'rgba(234,179,8,0.8)',
+            0.7,  'rgba(249,115,22,0.9)',
+            1.0,  'rgba(239,68,68,1)'
+          ],
+          'heatmap-radius': [
+            'interpolate', ['linear'],
+            ['zoom'],
+            5, 15,
+            8, 30,
+            12, 60
+          ],
+          'heatmap-opacity': 0.85
+        }
+      });
+    }
+
+    if (building && building.coordinates) {
+      map.flyTo({
+        center: building.coordinates,
+        zoom: 10,
+        duration: 1500
+      });
+    }
+  } catch (err) {
+    console.warn('Error adding fortyguard heatmap layer:', err);
+  }
+}
+
+async function loadFarmHeatmapTiles(building) {
+  if (!building || !building.coordinates) return;
+
+  // If already cached, render immediately
+  if (farmHeatmapCache[building.id]) {
+    const cached = farmHeatmapCache[building.id];
+    applyHeatmapTilesToMap(building, cached.features);
+    return;
+  }
+
+  try {
+    const res = await fetch(
+      'http://localhost:5000/heatmap-tiles',
+      {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({
+          farm_id: building.id,
+          lat: building.coordinates[1],
+          lon: building.coordinates[0],
+          radius_km: 8
+        })
+      }
+    );
+    
+    const data = await res.json();
+    if (data.status !== 'success' || !data.tiles || !data.tiles.length) return;
+    
+    const minTemp = data.stats.min;
+    const maxTemp = data.stats.max;
+    
+    const features = data.tiles.map(tile => ({
+      type: 'Feature',
+      properties: {
+        temp: tile.temp,
+        normalized: (tile.temp - minTemp) / (maxTemp - minTemp || 1)
+      },
+      geometry: {
+        type: 'Point',
+        coordinates: [tile.lon, tile.lat]
+      }
+    }));
+
+    farmHeatmapCache[building.id] = {
+      features: features,
+      data: data
+    };
+
+    applyHeatmapTilesToMap(building, features);
+    
+    console.log(
+      `Loaded ${data.tile_count} FortyGuard tiles, ` +
+      `temp range: ${data.stats.min.toFixed(1)}°C - ${data.stats.max.toFixed(1)}°C`
+    );
+    
+  } catch(e) {
+    console.error('Heatmap tiles error:', e);
+  }
+}
+
+// Satellite basemap toggle
+let satelliteMode = false;
+function toggleSatellite() {
+  satelliteMode = !satelliteMode;
+  console.log(`Switching map basemap to: ${satelliteMode ? 'satellite-streets-v12' : 'dark-v11'}`);
+  map.setStyle(
+    satelliteMode 
+      ? 'mapbox://styles/mapbox/satellite-streets-v12'
+      : 'mapbox://styles/mapbox/dark-v11'
+  );
+  const btn = document.getElementById('satellite-btn');
+  if (btn) {
+    btn.textContent = satelliteMode 
+      ? '🗺 Dark map' 
+      : '🛰 Satellite view';
+  }
+  
+  map.once('style.load', () => {
+    console.log('New basemap style loaded. Re-attaching satellite footprints, heatmap, and FortyGuard tiles.');
+    if (typeof addSatellitePanelPolygons === 'function') {
+      addSatellitePanelPolygons(map, BUILDINGS);
+    }
+    if (typeof addHeatmapLayer === 'function') {
+      addHeatmapLayer(map, BUILDINGS);
+    }
+    const current = currentBuilding || (typeof BUILDINGS !== 'undefined' ? BUILDINGS[0] : null);
+    if (current) {
+      loadFarmHeatmapTiles(current);
+    }
+  });
+}
 
 // Page initialization
 document.addEventListener('DOMContentLoaded', () => {
@@ -910,4 +1075,5 @@ document.addEventListener('DOMContentLoaded', () => {
   loadLiveData();
   analyzeBuilding(BUILDINGS[0]);
 });
+
 

@@ -199,6 +199,28 @@ body {
   background-size: 40px 40px;
 }
 
+/* Map Controls */
+.map-controls {
+  position: absolute;
+  top: 50px;
+  right: 10px;
+  z-index: 10;
+}
+#satellite-btn {
+  background: rgba(10,14,26,0.85);
+  border: 1px solid #374151;
+  color: #9ca3af;
+  padding: 6px 12px;
+  border-radius: 6px;
+  font-size: 11px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+#satellite-btn:hover {
+  border-color: #f97316;
+  color: #f97316;
+}
+
 /* Map Legend Overlay */
 .map-overlay-legend {
   position: absolute;
@@ -220,8 +242,24 @@ body {
   font-weight: 700;
   text-transform: uppercase;
   color: var(--text-secondary);
-  margin-bottom: 8px;
+  margin-bottom: 6px;
   letter-spacing: 0.08em;
+}
+
+.legend-gradient {
+  height: 6px;
+  border-radius: 3px;
+  background: linear-gradient(to right, #41b6c4, #7fcb7b, #c7e9b4, #ffeda0, #fd8d3c, #e31a1c);
+  margin: 6px 0 4px;
+}
+
+.legend-labels {
+  display: flex;
+  justify-content: space-between;
+  font-size: 8.5px;
+  color: #9ca3af;
+  font-weight: 500;
+  margin-bottom: 4px;
 }
 
 .legend-items {
