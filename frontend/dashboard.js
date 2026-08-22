@@ -142,6 +142,60 @@ const BUILDINGS = [
   }
 ];
 
+// Exact farm boundary polygons for utility-scale solar farms
+const FARM_BOUNDARIES = {
+  'SF001': {
+    name: 'Agua Caliente Solar Project',
+    polygon: [
+      [-113.5580, 32.9380],
+      [-113.4680, 32.9380],
+      [-113.4680, 32.9950],
+      [-113.5580, 32.9950],
+      [-113.5580, 32.9380]
+    ]
+  },
+  'SF002': {
+    name: 'Solana Generating Station',
+    polygon: [
+      [-113.0050, 32.8950],
+      [-112.9280, 32.8950],
+      [-112.9280, 32.9480],
+      [-113.0050, 32.9480],
+      [-113.0050, 32.8950]
+    ]
+  },
+  'SF003': {
+    name: 'Arlington Valley Solar',
+    polygon: [
+      [-112.9380, 33.3180],
+      [-112.8620, 33.3180],
+      [-112.8620, 33.3820],
+      [-112.9380, 33.3820],
+      [-112.9380, 33.3180]
+    ]
+  },
+  'SF004': {
+    name: 'Red Rock Solar Project',
+    polygon: [
+      [-111.8580, 32.7280],
+      [-111.7820, 32.7280],
+      [-111.7820, 32.7720],
+      [-111.8580, 32.7720],
+      [-111.8580, 32.7280]
+    ]
+  },
+  'SF005': {
+    name: 'Hyder Solar Project',
+    polygon: [
+      [-113.9380, 32.9580],
+      [-113.8620, 32.9580],
+      [-113.8620, 33.0120],
+      [-113.9380, 33.0120],
+      [-113.9380, 32.9580]
+    ]
+  }
+};
+
 let selectedBuilding = BUILDINGS[0];
 let currentBuilding = null;
 let currentMetrics = null;
@@ -188,8 +242,8 @@ function initMap() {
     map = new mapboxgl.Map({
       container: 'map',
       style: 'mapbox://styles/mapbox/dark-v11',
-      center: [-112.5000, 33.0000],
-      zoom: 8,
+      center: [-112.8000, 33.0000],
+      zoom: 7,
       minZoom: 5,
       maxZoom: 18
     });
@@ -212,17 +266,16 @@ function initMap() {
     });
 
     map.on('load', () => {
-      // 1. Add FortyGuard satellite panel polygon overlay
-      if (typeof addSatellitePanelPolygons === 'function') {
-        addSatellitePanelPolygons(map, BUILDINGS);
-      }
+      // 1. Show ALL 5 farms with their thermal polygon color based on risk score on overview load
+      BUILDINGS.forEach(building => {
+        const fakeMetrics = { 
+          risk_score: building.risk,
+          efficiency_loss_pct: 0.20
+        };
+        showFarmThermalOverlay(building, fakeMetrics, false);
+      });
 
-      // 2. Add heatmap layer
-      if (typeof addHeatmapLayer === 'function') {
-        addHeatmapLayer(map, BUILDINGS);
-      }
-
-      // 3. Add dot markers on top
+      // 2. Add dot markers on top
       BUILDINGS.forEach(b => {
         const el = document.createElement('div');
         el.className = 'custom-marker';
@@ -269,12 +322,6 @@ function initMap() {
 
         el.addEventListener('click', () => {
           analyzeBuilding(b);
-          map.flyTo({
-            center: b.coordinates || [b.lng, b.lat],
-            zoom: 10,
-            duration: 1500,
-            essential: true
-          });
         });
       });
 
@@ -522,17 +569,9 @@ async function analyzeBuilding(building) {
       })
       .catch(fErr => console.error('Error reloading forecast:', fErr));
 
-    // Load FortyGuard actual heatmap tile data over the solar farm
-    loadFarmHeatmapTiles(building);
-
-    // Optical satellite solar panel detection
-    if (building && building.coordinates) {
-      detectSolarPanels(
-        building.coordinates[1],
-        building.coordinates[0],
-        building.label
-      );
-    }
+    // Show exact thermal polygon overlay and concentric gradient inside farm boundary
+    showFarmThermalOverlay(building, data);
+    addThermalGradientInside(building, data);
   } catch (err) {
     console.error('Error analyzing building:', err);
   }
@@ -913,362 +952,190 @@ async function getAIRecommendation() {
   if (btn) btn.style.display = 'block';
 }
 
-// Expose globals for satellite polygon interactions
+// Expose globals for console / window interactions
 window.analyzeBuilding = analyzeBuilding;
 window.BUILDINGS = BUILDINGS;
-window.loadFarmHeatmapTiles = loadFarmHeatmapTiles;
+window.FARM_BOUNDARIES = FARM_BOUNDARIES;
+window.showFarmThermalOverlay = showFarmThermalOverlay;
+window.addThermalGradientInside = addThermalGradientInside;
 window.toggleSatellite = toggleSatellite;
-window.detectSolarPanels = detectSolarPanels;
-window.handleFarmLookup = handleFarmLookup;
-window.analyzeLookedUpFarm = analyzeLookedUpFarm;
 
-// Known solar farms dictionary for lookup
-const KNOWN_SOLAR_FARMS = {
-  'topaz solar farm': { lat: 35.3800, lon: -120.0800, name: 'Topaz Solar Farm', address: 'San Luis Obispo County, California', capacity: '550 MW' },
-  'topaz': { lat: 35.3800, lon: -120.0800, name: 'Topaz Solar Farm', address: 'San Luis Obispo County, California', capacity: '550 MW' },
-  'agua caliente solar project': { lat: 32.9667, lon: -113.5000, name: 'Agua Caliente Solar Project', address: 'Yuma County, Arizona', capacity: '290 MW' },
-  'agua caliente': { lat: 32.9667, lon: -113.5000, name: 'Agua Caliente Solar Project', address: 'Yuma County, Arizona', capacity: '290 MW' },
-  'solana generating station': { lat: 32.9170, lon: -112.9670, name: 'Solana Generating Station', address: 'Gila Bend, Arizona', capacity: '250 MW' },
-  'solana': { lat: 32.9170, lon: -112.9670, name: 'Solana Generating Station', address: 'Gila Bend, Arizona', capacity: '250 MW' },
-  'arlington valley solar energy': { lat: 33.3500, lon: -112.9000, name: 'Arlington Valley Solar Energy', address: 'Arlington, Arizona', capacity: '125 MW' },
-  'arlington valley': { lat: 33.3500, lon: -112.9000, name: 'Arlington Valley Solar Energy', address: 'Arlington, Arizona', capacity: '125 MW' },
-  'red rock solar project': { lat: 32.7500, lon: -111.8200, name: 'Red Rock Solar Project', address: 'Pinal County, Arizona', capacity: '60 MW' },
-  'red rock': { lat: 32.7500, lon: -111.8200, name: 'Red Rock Solar Project', address: 'Pinal County, Arizona', capacity: '60 MW' },
-  'hyder solar project': { lat: 32.9800, lon: -113.9000, name: 'Hyder Solar Project', address: 'Hyder, Arizona', capacity: '200 MW' },
-  'hyder': { lat: 32.9800, lon: -113.9000, name: 'Hyder Solar Project', address: 'Hyder, Arizona', capacity: '200 MW' },
-  'desert sunlight solar farm': { lat: 33.8200, lon: -115.4000, name: 'Desert Sunlight Solar Farm', address: 'Riverside County, California', capacity: '550 MW' },
-  'desert sunlight': { lat: 33.8200, lon: -115.4000, name: 'Desert Sunlight Solar Farm', address: 'Riverside County, California', capacity: '550 MW' },
-  'ivanpah solar': { lat: 35.5567, lon: -115.4700, name: 'Ivanpah Solar Electric', address: 'San Bernardino County, California', capacity: '392 MW' },
-  'copper mountain solar facility': { lat: 35.7900, lon: -114.9900, name: 'Copper Mountain Solar Facility', address: 'Boulder City, Nevada', capacity: '552 MW' }
-};
-
-function handleFarmLookup() {
-  const input = document.getElementById('farm-lookup-input');
-  const query = (input?.value || '').trim();
-  if (!query) return;
-
-  const qLower = query.toLowerCase();
-  let farm = KNOWN_SOLAR_FARMS[qLower];
+/**
+ * FIX 2: Replace heatmap with exact polygon fill
+ * Shows thermal data ONLY within the actual solar farm boundary
+ */
+function showFarmThermalOverlay(building, metrics, fly = true) {
+  if (!map || !building) return;
+  const boundary = FARM_BOUNDARIES[building.id || building.building_id];
+  if (!boundary) return;
   
-  if (!farm) {
-    for (const [k, v] of Object.entries(KNOWN_SOLAR_FARMS)) {
-      if (qLower.includes(k) || k.includes(qLower)) {
-        farm = v;
-        break;
+  const risk = (metrics && metrics.risk_score !== undefined) ? metrics.risk_score : (building.risk || 70);
+  const lossPct = (metrics && metrics.efficiency_loss_pct !== undefined) ? metrics.efficiency_loss_pct : 0;
+  
+  function getHeatColor(r, opacity) {
+    if (r >= 90) return `rgba(227,26,28,${opacity})`;
+    if (r >= 80) return `rgba(253,141,60,${opacity})`;
+    if (r >= 70) return `rgba(255,237,160,${opacity})`;
+    if (r >= 60) return `rgba(173,221,142,${opacity})`;
+    return `rgba(49,163,84,${opacity})`;
+  }
+  
+  const bId = building.id || building.building_id;
+  const sourceId = `thermal-${bId}`;
+  const fillId = `thermal-fill-${bId}`;
+  const outlineId = `thermal-outline-${bId}`;
+  
+  if (map.getLayer(fillId)) map.removeLayer(fillId);
+  if (map.getLayer(outlineId)) map.removeLayer(outlineId);
+  if (map.getSource(sourceId)) map.removeSource(sourceId);
+  
+  map.addSource(sourceId, {
+    type: 'geojson',
+    data: {
+      type: 'Feature',
+      properties: { risk, lossPct },
+      geometry: {
+        type: 'Polygon',
+        coordinates: [boundary.polygon]
       }
     }
-  }
-
-  if (!farm) {
-    const matchedBuilding = BUILDINGS.find(b => 
-      b.label.toLowerCase().includes(qLower) || 
-      (b.address && b.address.toLowerCase().includes(qLower))
-    );
-    if (matchedBuilding) {
-      farm = {
-        lat: matchedBuilding.coordinates[1],
-        lon: matchedBuilding.coordinates[0],
-        name: matchedBuilding.label,
-        address: matchedBuilding.address,
-        capacity: (matchedBuilding.rated_kw / 1000) + ' MW',
-        building: matchedBuilding
-      };
+  });
+  
+  map.addLayer({
+    id: fillId,
+    type: 'fill',
+    source: sourceId,
+    paint: {
+      'fill-color': getHeatColor(risk, 0.65),
+      'fill-opacity': 0.75
     }
-  }
-
-  if (!farm) {
-    farm = {
-      lat: 35.3800,
-      lon: -120.0800,
-      name: query,
-      address: 'Utility Solar Installation'
-    };
-  }
-
-  analyzeLookedUpFarm(farm.lat, farm.lon, farm.name, farm);
-}
-
-function analyzeLookedUpFarm(lat, lon, name, farmData) {
-  const resultDiv = document.getElementById('lookup-result');
-  if (resultDiv) {
-    resultDiv.style.display = 'block';
-    resultDiv.innerHTML = `
-      <div style="font-weight:600; color:#f3f4f6; margin-bottom:4px">🔍 ${name}</div>
-      <div>Coordinates: ${lat.toFixed(4)}°N, ${lon.toFixed(4)}°W • ${farmData?.address || 'Scanned Location'} ${farmData?.capacity ? `• ${farmData.capacity}` : ''}</div>
-    `;
-  }
-
-  if (map) {
+  });
+  
+  map.addLayer({
+    id: outlineId,
+    type: 'line',
+    source: sourceId,
+    paint: {
+      'line-color': getHeatColor(risk, 1),
+      'line-width': 2,
+      'line-opacity': 0.9
+    }
+  });
+  
+  // Click on farm polygon to analyze
+  map.on('click', fillId, () => {
+    analyzeBuilding(building);
+  });
+  map.on('mouseenter', fillId, () => {
+    map.getCanvas().style.cursor = 'pointer';
+  });
+  map.on('mouseleave', fillId, () => {
+    map.getCanvas().style.cursor = '';
+  });
+  
+  if (fly && building.coordinates) {
     map.flyTo({
-      center: [lon, lat],
+      center: building.coordinates,
       zoom: 11,
-      essential: true,
       duration: 1500
     });
   }
-
-  const match = BUILDINGS.find(b => Math.abs(b.coordinates[0] - lon) < 0.05 && Math.abs(b.coordinates[1] - lat) < 0.05);
-  if (match) {
-    selectedBuilding = match;
-    currentBuilding = match;
-  }
-
-  detectSolarPanels(lat, lon, name);
 }
 
-async function detectSolarPanels(lat, lon, name) {
-  const panel = document.getElementById('satellite-detection-panel');
-  const loading = document.getElementById('detection-loading');
-  const stats = document.getElementById('detection-stats');
-  const img = document.getElementById('satellite-img');
+/**
+ * FIX 3: Add concentric temperature gradient INSIDE polygon
+ * Generates concentric heat zones inside the boundary: hottest in center, cooler at edges
+ */
+function addThermalGradientInside(building, metrics) {
+  if (!map || !building) return;
+  const boundary = FARM_BOUNDARIES[building.id || building.building_id];
+  if (!boundary) return;
   
-  if (panel) panel.style.display = 'block';
-  if (loading) loading.style.display = 'block';
-  if (stats) stats.style.display = 'none';
-  if (img) img.style.display = 'none';
+  const risk = (metrics && metrics.risk_score !== undefined) ? metrics.risk_score : (building.risk || 70);
+  const centerLon = building.coordinates[0];
+  const centerLat = building.coordinates[1];
   
-  try {
-    const res = await fetch(
-      `${API_BASE}/satellite-detect`,
-      {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({ lat, lon, zoom: 15 })
-      }
-    );
-    
-    const data = await res.json();
-    if (loading) loading.style.display = 'none';
-    
-    if (data.status === 'success') {
-      if (img) {
-        img.src = 'data:image/jpeg;base64,' + data.image_b64;
-        img.style.display = 'block';
-      }
-      
-      const canvas = document.getElementById('detection-overlay');
-      if (canvas && img) {
-        const renderOverlay = () => {
-          canvas.width = img.clientWidth || img.naturalWidth || 640;
-          canvas.height = img.clientHeight || img.naturalHeight || 640;
-          
-          const ctx = canvas.getContext('2d');
-          ctx.clearRect(0, 0, canvas.width, canvas.height);
-          ctx.strokeStyle = '#22c55e';
-          ctx.lineWidth = 2;
-          ctx.fillStyle = 'rgba(34,197,94,0.15)';
-          
-          if (data.panel_polygons && data.panel_polygons.length) {
-            const cols = 8;
-            const cellW = canvas.width / cols;
-            const cellH = canvas.height / cols;
-            
-            data.panel_polygons.forEach((p, i) => {
-              let row = Math.floor(i / cols);
-              let col = i % cols;
-              if (p.grid_pos && Array.isArray(p.grid_pos)) {
-                row = p.grid_pos[0];
-                col = p.grid_pos[1];
-              }
-              const x = col * cellW;
-              const y = row * cellH;
-              ctx.fillRect(x + 2, y + 2, cellW - 4, cellH - 4);
-              ctx.strokeRect(x + 2, y + 2, cellW - 4, cellH - 4);
-            });
-          }
-        };
+  const poly = boundary.polygon;
+  const lons = poly.map(p => p[0]);
+  const lats = poly.map(p => p[1]);
+  const width = Math.max(...lons) - Math.min(...lons);
+  const height = Math.max(...lats) - Math.min(...lats);
+  
+  const zones = [
+    { scale: 1.0, opacity: 0.35, riskMod: 0 },
+    { scale: 0.75, opacity: 0.45, riskMod: 5 },
+    { scale: 0.50, opacity: 0.55, riskMod: 10 },
+    { scale: 0.25, opacity: 0.70, riskMod: 15 }
+  ];
+  
+  function getHeatColor(r, opacity) {
+    if (r >= 95) return `rgba(165,0,38,${opacity})`;
+    if (r >= 88) return `rgba(227,26,28,${opacity})`;
+    if (r >= 80) return `rgba(253,141,60,${opacity})`;
+    if (r >= 70) return `rgba(255,237,160,${opacity})`;
+    return `rgba(173,221,142,${opacity})`;
+  }
+  
+  // Clean up any previously active gradient zones across all farms
+  ['SF001', 'SF002', 'SF003', 'SF004', 'SF005'].forEach(farmId => {
+    [0, 1, 2, 3].forEach(idx => {
+      const zId = `zone-${farmId}-${idx}`;
+      if (map.getLayer(zId)) map.removeLayer(zId);
+      if (map.getSource(zId)) map.removeSource(zId);
+    });
+  });
 
-        if (img.complete && img.naturalWidth) {
-          setTimeout(renderOverlay, 50);
-        } else {
-          img.onload = () => setTimeout(renderOverlay, 50);
+  const bId = building.id || building.building_id;
+  zones.forEach((zone, i) => {
+    const zoneId = `zone-${bId}-${i}`;
+    if (map.getLayer(zoneId)) 
+      map.removeLayer(zoneId);
+    if (map.getSource(zoneId)) 
+      map.removeSource(zoneId);
+    
+    const w = width * zone.scale / 2;
+    const h = height * zone.scale / 2;
+    
+    const zonePoly = [
+      [centerLon - w, centerLat - h],
+      [centerLon + w, centerLat - h],
+      [centerLon + w, centerLat + h],
+      [centerLon - w, centerLat + h],
+      [centerLon - w, centerLat - h]
+    ];
+    
+    map.addSource(zoneId, {
+      type: 'geojson',
+      data: {
+        type: 'Feature',
+        properties: {},
+        geometry: {
+          type: 'Polygon',
+          coordinates: [zonePoly]
         }
       }
-      
-      if (stats) {
-        stats.innerHTML = `
-          <div style="background:#0f2a1a;
-                      border:1px solid #1a4a2a;
-                      border-radius:8px;padding:10px">
-            <div style="font-size:13px;font-weight:500;
-                        color:#22c55e;margin-bottom:6px">
-              ✓ ${data.panels_detected} panel zones detected
-            </div>
-            <div style="font-size:12px;color:#9ca3af">
-              Coverage: ~${data.coverage_pct.toFixed(1)}%
-              of scanned area
-            </div>
-            <div style="font-size:10px;color:#4b5563;
-                        margin-top:4px">
-              Green boxes = detected solar zones
-            </div>
-          </div>`;
-        stats.style.display = 'block';
+    });
+    
+    map.addLayer({
+      id: zoneId,
+      type: 'fill',
+      source: zoneId,
+      paint: {
+        'fill-color': getHeatColor(
+          risk + zone.riskMod, 
+          zone.opacity
+        ),
+        'fill-opacity': 1
       }
-    } else {
-      if (stats) {
-        stats.innerHTML = `
-          <div style="font-size:12px;color:#ef4444;padding:8px">
-            Detection unavailable: ${data.message || 'Unknown error'}
-          </div>`;
-        stats.style.display = 'block';
-      }
-    }
-    
-  } catch(e) {
-    if (loading) loading.style.display = 'none';
-    if (stats) {
-      stats.innerHTML = `
-        <div style="font-size:12px;color:#ef4444;padding:8px">
-          Detection unavailable: ${e.message}
-        </div>`;
-      stats.style.display = 'block';
-    }
-  }
-}
-
-// FortyGuard Heatmap Tiles Layer & Cache
-const farmHeatmapCache = {};
-
-function updateLegendTempRange(stats) {
-  if (!stats) return;
-  const tempRangeEl = document.getElementById('temp-range');
-  const tempMinEl = document.getElementById('temp-min');
-  const tempMaxEl = document.getElementById('temp-max');
-  if (tempRangeEl) tempRangeEl.style.display = 'block';
-  if (tempMinEl && stats.min !== undefined) tempMinEl.textContent = stats.min.toFixed(1);
-  if (tempMaxEl && stats.max !== undefined) tempMaxEl.textContent = stats.max.toFixed(1);
-}
-
-function applyHeatmapTilesToMap(building, features) {
-  if (!map || !features) return;
-  const sourceId = 'fortyguard-tiles';
-
-  try {
-    if (map.getSource(sourceId)) {
-      map.getSource(sourceId).setData({
-        type: 'FeatureCollection',
-        features: features
-      });
-    } else {
-      map.addSource(sourceId, {
-        type: 'geojson',
-        data: {
-          type: 'FeatureCollection',
-          features: features
-        }
-      });
-      
-      map.addLayer({
-        id: 'fortyguard-heat-layer',
-        type: 'heatmap',
-        source: sourceId,
-        paint: {
-          'heatmap-weight': [
-            'interpolate', ['linear'],
-            ['get', 'normalized'],
-            0, 0, 1, 1
-          ],
-          'heatmap-intensity': 3.0,
-          'heatmap-color': [
-            'interpolate', ['linear'],
-            ['heatmap-density'],
-            0,    'rgba(0,0,0,0)',
-            0.1,  'rgba(65,182,196,0.6)',
-            0.3,  'rgba(127,205,187,0.7)',
-            0.5,  'rgba(199,233,180,0.8)',
-            0.7,  'rgba(255,237,160,0.9)',
-            0.85, 'rgba(253,141,60,0.95)',
-            1.0,  'rgba(227,26,28,1)'
-          ],
-          'heatmap-radius': [
-            'interpolate', ['linear'],
-            ['zoom'],
-            5, 8,
-            8, 15,
-            10, 25,
-            12, 40
-          ],
-          'heatmap-opacity': satelliteMode ? 0.75 : 0.90
-        }
-      });
-    }
-
-    if (building && building.coordinates) {
-      map.flyTo({
-        center: building.coordinates,
-        zoom: 10,
-        duration: 1500
-      });
-    }
-  } catch (err) {
-    console.warn('Error adding fortyguard heatmap layer:', err);
-  }
-}
-
-async function loadFarmHeatmapTiles(building) {
-  if (!building || !building.coordinates) return;
-
-  // If already cached, render immediately
-  if (farmHeatmapCache[building.id]) {
-    const cached = farmHeatmapCache[building.id];
-    applyHeatmapTilesToMap(building, cached.features);
-    if (cached.data && cached.data.stats) {
-      updateLegendTempRange(cached.data.stats);
-    }
-    return;
-  }
-
-  try {
-    const res = await fetch(
-      'http://localhost:5000/heatmap-tiles',
-      {
-        method: 'POST',
-        headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({
-          farm_id: building.id,
-          lat: building.coordinates[1],
-          lon: building.coordinates[0],
-          radius_km: 8
-        })
-      }
-    );
-    
-    const data = await res.json();
-    if (data.status !== 'success' || !data.tiles || !data.tiles.length) return;
-    
-    const minTemp = data.stats.min;
-    const maxTemp = data.stats.max;
-    
-    const features = data.tiles.map(tile => ({
-      type: 'Feature',
-      properties: {
-        temp: tile.temp,
-        normalized: (tile.temp - minTemp) / (maxTemp - minTemp || 1)
-      },
-      geometry: {
-        type: 'Point',
-        coordinates: [tile.lon, tile.lat]
-      }
-    }));
-
-    farmHeatmapCache[building.id] = {
-      features: features,
-      data: data
-    };
-
-    applyHeatmapTilesToMap(building, features);
-    updateLegendTempRange(data.stats);
-    
-    console.log(
-      `Loaded ${data.tile_count} FortyGuard tiles, ` +
-      `temp range: ${data.stats.min.toFixed(1)}°C - ${data.stats.max.toFixed(1)}°C`
-    );
-    
-  } catch(e) {
-    console.error('Heatmap tiles error:', e);
+    });
+  });
+  
+  if (building.coordinates) {
+    map.flyTo({
+      center: building.coordinates,
+      zoom: 11,
+      duration: 1500
+    });
   }
 }
 
@@ -1288,28 +1155,24 @@ function toggleSatellite() {
       ? '🗺 Dark map' 
       : '🛰 Satellite view';
   }
-  
-  setTimeout(() => {
-    if (map.getLayer('fortyguard-heat-layer')) {
-      map.setPaintProperty(
-        'fortyguard-heat-layer',
-        'heatmap-opacity',
-        satelliteMode ? 0.75 : 0.90
-      );
-    }
-  }, 500);
 
   map.once('style.load', () => {
-    console.log('New basemap style loaded. Re-attaching satellite footprints, heatmap, and FortyGuard tiles.');
-    if (typeof addSatellitePanelPolygons === 'function') {
-      addSatellitePanelPolygons(map, BUILDINGS);
-    }
-    if (typeof addHeatmapLayer === 'function') {
-      addHeatmapLayer(map, BUILDINGS);
-    }
-    const current = currentBuilding || (typeof BUILDINGS !== 'undefined' ? BUILDINGS[0] : null);
+    console.log('New basemap style loaded. Re-attaching farm thermal overlays.');
+    // Re-attach base thermal polygons for all 5 farms
+    BUILDINGS.forEach(b => {
+      const fakeMetrics = { 
+        risk_score: b.risk,
+        efficiency_loss_pct: 0.20
+      };
+      showFarmThermalOverlay(b, fakeMetrics, false);
+    });
+    
+    // Re-attach concentric gradient for active building
+    const current = currentBuilding || selectedBuilding || BUILDINGS[0];
     if (current) {
-      loadFarmHeatmapTiles(current);
+      const metrics = currentMetrics || { risk_score: current.risk };
+      showFarmThermalOverlay(current, metrics, false);
+      addThermalGradientInside(current, metrics);
     }
   });
 }
