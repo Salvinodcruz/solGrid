@@ -269,6 +269,12 @@ function initMap() {
 
         el.addEventListener('click', () => {
           analyzeBuilding(b);
+          map.flyTo({
+            center: b.coordinates || [b.lng, b.lat],
+            zoom: 10,
+            duration: 1500,
+            essential: true
+          });
         });
       });
 
@@ -907,6 +913,16 @@ window.toggleSatellite = toggleSatellite;
 // FortyGuard Heatmap Tiles Layer & Cache
 const farmHeatmapCache = {};
 
+function updateLegendTempRange(stats) {
+  if (!stats) return;
+  const tempRangeEl = document.getElementById('temp-range');
+  const tempMinEl = document.getElementById('temp-min');
+  const tempMaxEl = document.getElementById('temp-max');
+  if (tempRangeEl) tempRangeEl.style.display = 'block';
+  if (tempMinEl && stats.min !== undefined) tempMinEl.textContent = stats.min.toFixed(1);
+  if (tempMaxEl && stats.max !== undefined) tempMaxEl.textContent = stats.max.toFixed(1);
+}
+
 function applyHeatmapTilesToMap(building, features) {
   if (!map || !features) return;
   const sourceId = 'fortyguard-tiles';
@@ -936,25 +952,27 @@ function applyHeatmapTilesToMap(building, features) {
             ['get', 'normalized'],
             0, 0, 1, 1
           ],
-          'heatmap-intensity': 2.0,
+          'heatmap-intensity': 3.0,
           'heatmap-color': [
             'interpolate', ['linear'],
             ['heatmap-density'],
-            0,    'rgba(30,64,175,0)',
-            0.1,  'rgba(59,130,246,0.6)',
-            0.3,  'rgba(34,197,94,0.7)',
-            0.5,  'rgba(234,179,8,0.8)',
-            0.7,  'rgba(249,115,22,0.9)',
-            1.0,  'rgba(239,68,68,1)'
+            0,    'rgba(0,0,0,0)',
+            0.1,  'rgba(65,182,196,0.6)',
+            0.3,  'rgba(127,205,187,0.7)',
+            0.5,  'rgba(199,233,180,0.8)',
+            0.7,  'rgba(255,237,160,0.9)',
+            0.85, 'rgba(253,141,60,0.95)',
+            1.0,  'rgba(227,26,28,1)'
           ],
           'heatmap-radius': [
             'interpolate', ['linear'],
             ['zoom'],
-            5, 15,
-            8, 30,
-            12, 60
+            5, 8,
+            8, 15,
+            10, 25,
+            12, 40
           ],
-          'heatmap-opacity': 0.85
+          'heatmap-opacity': satelliteMode ? 0.75 : 0.90
         }
       });
     }
@@ -978,6 +996,9 @@ async function loadFarmHeatmapTiles(building) {
   if (farmHeatmapCache[building.id]) {
     const cached = farmHeatmapCache[building.id];
     applyHeatmapTilesToMap(building, cached.features);
+    if (cached.data && cached.data.stats) {
+      updateLegendTempRange(cached.data.stats);
+    }
     return;
   }
 
@@ -1020,6 +1041,7 @@ async function loadFarmHeatmapTiles(building) {
     };
 
     applyHeatmapTilesToMap(building, features);
+    updateLegendTempRange(data.stats);
     
     console.log(
       `Loaded ${data.tile_count} FortyGuard tiles, ` +
@@ -1048,6 +1070,16 @@ function toggleSatellite() {
       : '🛰 Satellite view';
   }
   
+  setTimeout(() => {
+    if (map.getLayer('fortyguard-heat-layer')) {
+      map.setPaintProperty(
+        'fortyguard-heat-layer',
+        'heatmap-opacity',
+        satelliteMode ? 0.75 : 0.90
+      );
+    }
+  }, 500);
+
   map.once('style.load', () => {
     console.log('New basemap style loaded. Re-attaching satellite footprints, heatmap, and FortyGuard tiles.');
     if (typeof addSatellitePanelPolygons === 'function') {

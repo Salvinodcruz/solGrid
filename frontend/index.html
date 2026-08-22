@@ -56,12 +56,21 @@
           🛰 Satellite view
         </button>
       </div>
-      <div class="map-overlay-legend">
-        <div class="legend-title">Satellite Heat Stress</div>
-        <div class="legend-items">
-          <div class="legend-item"><span class="dot red"></span> &gt; 62°C Critical Stress</div>
-          <div class="legend-item"><span class="dot amber"></span> 50°C - 62°C Moderate</div>
-          <div class="legend-item"><span class="dot green"></span> &lt; 50°C Optimal</div>
+      <div class="legend map-overlay-legend">
+        <div class="legend-title">THERMAL LOSS INTENSITY</div>
+        <div class="legend-gradient"></div>
+        <div class="legend-labels">
+          <span>Low</span>
+          <span>Moderate</span>
+          <span>Critical</span>
+        </div>
+        <div id="temp-range" style="margin-top:6px; font-size:9px; color:#6b7280; display:none">
+          <span id="temp-min">--</span>°C — 
+          <span id="temp-max">--</span>°C
+          <br>FortyGuard live data
+        </div>
+        <div style="margin-top:6px; font-size:9px; color:#4b5563">
+          Click any farm to analyze
         </div>
       </div>
     </section>

@@ -37,6 +37,31 @@ const fs = require('fs');
       fs.mkdirSync(artifactDir, { recursive: true });
     }
 
+    // Check legend values
+    const legendState = await page.evaluate(() => {
+      const tempRange = document.getElementById('temp-range');
+      const tempMin = document.getElementById('temp-min');
+      const tempMax = document.getElementById('temp-max');
+      return {
+        display: tempRange?.style?.display,
+        min: tempMin?.textContent,
+        max: tempMax?.textContent
+      };
+    });
+    console.log('Legend State (Initial):', JSON.stringify(legendState, null, 2));
+
+    // Check layer paint properties
+    const paintPropsDark = await page.evaluate(() => {
+      const heatLayer = map?.getLayer('fortyguard-heat-layer');
+      return {
+        opacity: map?.getPaintProperty('fortyguard-heat-layer', 'heatmap-opacity'),
+        intensity: map?.getPaintProperty('fortyguard-heat-layer', 'heatmap-intensity'),
+        color: map?.getPaintProperty('fortyguard-heat-layer', 'heatmap-color'),
+        radius: map?.getPaintProperty('fortyguard-heat-layer', 'heatmap-radius')
+      };
+    });
+    console.log('Paint Properties (Dark Mode):', JSON.stringify(paintPropsDark, null, 2));
+
     const stateBefore = await page.evaluate(() => {
       const tilesSource = map?.getSource('fortyguard-tiles');
       const heatLayer = map?.getLayer('fortyguard-heat-layer');
@@ -54,6 +79,22 @@ const fs = require('fs');
     const screenshotDarkPath = path.join(artifactDir, 'solgrid_dark_view.png');
     await page.screenshot({ path: screenshotDarkPath, fullPage: true });
     console.log('Dark view screenshot successfully saved to:', screenshotDarkPath);
+
+    // Test marker click for Agua Caliente
+    console.log('Testing marker click on Agua Caliente...');
+    await page.evaluate(() => {
+      const markers = document.querySelectorAll('.custom-marker');
+      if (markers.length > 0) {
+        markers[0].click();
+      }
+    });
+    await new Promise(r => setTimeout(r, 2000));
+
+    const stateAfterMarkerClick = await page.evaluate(() => ({
+      center: map?.getCenter(),
+      zoom: map?.getZoom()
+    }));
+    console.log('Map State (After Marker Click):', JSON.stringify(stateAfterMarkerClick, null, 2));
 
     // Check Satellite toggle button
     const btnTextBefore = await page.evaluate(() => document.getElementById('satellite-btn')?.textContent?.trim());
@@ -76,6 +117,12 @@ const fs = require('fs');
 
     const btnTextAfter = await page.evaluate(() => document.getElementById('satellite-btn')?.textContent?.trim());
     console.log('Satellite button after click:', btnTextAfter);
+
+    const paintPropsSat = await page.evaluate(() => ({
+      opacity: map?.getPaintProperty('fortyguard-heat-layer', 'heatmap-opacity'),
+      intensity: map?.getPaintProperty('fortyguard-heat-layer', 'heatmap-intensity')
+    }));
+    console.log('Paint Properties (Satellite Mode):', JSON.stringify(paintPropsSat, null, 2));
 
     const stateAfterSat = await page.evaluate(() => {
       const tilesSource = map?.getSource('fortyguard-tiles');

@@ -222,7 +222,8 @@ body {
 }
 
 /* Map Legend Overlay */
-.map-overlay-legend {
+.map-overlay-legend,
+.legend {
   position: absolute;
   bottom: 20px;
   left: 20px;
