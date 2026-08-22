@@ -524,6 +524,15 @@ async function analyzeBuilding(building) {
 
     // Load FortyGuard actual heatmap tile data over the solar farm
     loadFarmHeatmapTiles(building);
+
+    // Optical satellite solar panel detection
+    if (building && building.coordinates) {
+      detectSolarPanels(
+        building.coordinates[1],
+        building.coordinates[0],
+        building.label
+      );
+    }
   } catch (err) {
     console.error('Error analyzing building:', err);
   }
@@ -909,6 +918,216 @@ window.analyzeBuilding = analyzeBuilding;
 window.BUILDINGS = BUILDINGS;
 window.loadFarmHeatmapTiles = loadFarmHeatmapTiles;
 window.toggleSatellite = toggleSatellite;
+window.detectSolarPanels = detectSolarPanels;
+window.handleFarmLookup = handleFarmLookup;
+window.analyzeLookedUpFarm = analyzeLookedUpFarm;
+
+// Known solar farms dictionary for lookup
+const KNOWN_SOLAR_FARMS = {
+  'topaz solar farm': { lat: 35.3800, lon: -120.0800, name: 'Topaz Solar Farm', address: 'San Luis Obispo County, California', capacity: '550 MW' },
+  'topaz': { lat: 35.3800, lon: -120.0800, name: 'Topaz Solar Farm', address: 'San Luis Obispo County, California', capacity: '550 MW' },
+  'agua caliente solar project': { lat: 32.9667, lon: -113.5000, name: 'Agua Caliente Solar Project', address: 'Yuma County, Arizona', capacity: '290 MW' },
+  'agua caliente': { lat: 32.9667, lon: -113.5000, name: 'Agua Caliente Solar Project', address: 'Yuma County, Arizona', capacity: '290 MW' },
+  'solana generating station': { lat: 32.9170, lon: -112.9670, name: 'Solana Generating Station', address: 'Gila Bend, Arizona', capacity: '250 MW' },
+  'solana': { lat: 32.9170, lon: -112.9670, name: 'Solana Generating Station', address: 'Gila Bend, Arizona', capacity: '250 MW' },
+  'arlington valley solar energy': { lat: 33.3500, lon: -112.9000, name: 'Arlington Valley Solar Energy', address: 'Arlington, Arizona', capacity: '125 MW' },
+  'arlington valley': { lat: 33.3500, lon: -112.9000, name: 'Arlington Valley Solar Energy', address: 'Arlington, Arizona', capacity: '125 MW' },
+  'red rock solar project': { lat: 32.7500, lon: -111.8200, name: 'Red Rock Solar Project', address: 'Pinal County, Arizona', capacity: '60 MW' },
+  'red rock': { lat: 32.7500, lon: -111.8200, name: 'Red Rock Solar Project', address: 'Pinal County, Arizona', capacity: '60 MW' },
+  'hyder solar project': { lat: 32.9800, lon: -113.9000, name: 'Hyder Solar Project', address: 'Hyder, Arizona', capacity: '200 MW' },
+  'hyder': { lat: 32.9800, lon: -113.9000, name: 'Hyder Solar Project', address: 'Hyder, Arizona', capacity: '200 MW' },
+  'desert sunlight solar farm': { lat: 33.8200, lon: -115.4000, name: 'Desert Sunlight Solar Farm', address: 'Riverside County, California', capacity: '550 MW' },
+  'desert sunlight': { lat: 33.8200, lon: -115.4000, name: 'Desert Sunlight Solar Farm', address: 'Riverside County, California', capacity: '550 MW' },
+  'ivanpah solar': { lat: 35.5567, lon: -115.4700, name: 'Ivanpah Solar Electric', address: 'San Bernardino County, California', capacity: '392 MW' },
+  'copper mountain solar facility': { lat: 35.7900, lon: -114.9900, name: 'Copper Mountain Solar Facility', address: 'Boulder City, Nevada', capacity: '552 MW' }
+};
+
+function handleFarmLookup() {
+  const input = document.getElementById('farm-lookup-input');
+  const query = (input?.value || '').trim();
+  if (!query) return;
+
+  const qLower = query.toLowerCase();
+  let farm = KNOWN_SOLAR_FARMS[qLower];
+  
+  if (!farm) {
+    for (const [k, v] of Object.entries(KNOWN_SOLAR_FARMS)) {
+      if (qLower.includes(k) || k.includes(qLower)) {
+        farm = v;
+        break;
+      }
+    }
+  }
+
+  if (!farm) {
+    const matchedBuilding = BUILDINGS.find(b => 
+      b.label.toLowerCase().includes(qLower) || 
+      (b.address && b.address.toLowerCase().includes(qLower))
+    );
+    if (matchedBuilding) {
+      farm = {
+        lat: matchedBuilding.coordinates[1],
+        lon: matchedBuilding.coordinates[0],
+        name: matchedBuilding.label,
+        address: matchedBuilding.address,
+        capacity: (matchedBuilding.rated_kw / 1000) + ' MW',
+        building: matchedBuilding
+      };
+    }
+  }
+
+  if (!farm) {
+    farm = {
+      lat: 35.3800,
+      lon: -120.0800,
+      name: query,
+      address: 'Utility Solar Installation'
+    };
+  }
+
+  analyzeLookedUpFarm(farm.lat, farm.lon, farm.name, farm);
+}
+
+function analyzeLookedUpFarm(lat, lon, name, farmData) {
+  const resultDiv = document.getElementById('lookup-result');
+  if (resultDiv) {
+    resultDiv.style.display = 'block';
+    resultDiv.innerHTML = `
+      <div style="font-weight:600; color:#f3f4f6; margin-bottom:4px">🔍 ${name}</div>
+      <div>Coordinates: ${lat.toFixed(4)}°N, ${lon.toFixed(4)}°W • ${farmData?.address || 'Scanned Location'} ${farmData?.capacity ? `• ${farmData.capacity}` : ''}</div>
+    `;
+  }
+
+  if (map) {
+    map.flyTo({
+      center: [lon, lat],
+      zoom: 11,
+      essential: true,
+      duration: 1500
+    });
+  }
+
+  const match = BUILDINGS.find(b => Math.abs(b.coordinates[0] - lon) < 0.05 && Math.abs(b.coordinates[1] - lat) < 0.05);
+  if (match) {
+    selectedBuilding = match;
+    currentBuilding = match;
+  }
+
+  detectSolarPanels(lat, lon, name);
+}
+
+async function detectSolarPanels(lat, lon, name) {
+  const panel = document.getElementById('satellite-detection-panel');
+  const loading = document.getElementById('detection-loading');
+  const stats = document.getElementById('detection-stats');
+  const img = document.getElementById('satellite-img');
+  
+  if (panel) panel.style.display = 'block';
+  if (loading) loading.style.display = 'block';
+  if (stats) stats.style.display = 'none';
+  if (img) img.style.display = 'none';
+  
+  try {
+    const res = await fetch(
+      `${API_BASE}/satellite-detect`,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ lat, lon, zoom: 15 })
+      }
+    );
+    
+    const data = await res.json();
+    if (loading) loading.style.display = 'none';
+    
+    if (data.status === 'success') {
+      if (img) {
+        img.src = 'data:image/jpeg;base64,' + data.image_b64;
+        img.style.display = 'block';
+      }
+      
+      const canvas = document.getElementById('detection-overlay');
+      if (canvas && img) {
+        const renderOverlay = () => {
+          canvas.width = img.clientWidth || img.naturalWidth || 640;
+          canvas.height = img.clientHeight || img.naturalHeight || 640;
+          
+          const ctx = canvas.getContext('2d');
+          ctx.clearRect(0, 0, canvas.width, canvas.height);
+          ctx.strokeStyle = '#22c55e';
+          ctx.lineWidth = 2;
+          ctx.fillStyle = 'rgba(34,197,94,0.15)';
+          
+          if (data.panel_polygons && data.panel_polygons.length) {
+            const cols = 8;
+            const cellW = canvas.width / cols;
+            const cellH = canvas.height / cols;
+            
+            data.panel_polygons.forEach((p, i) => {
+              let row = Math.floor(i / cols);
+              let col = i % cols;
+              if (p.grid_pos && Array.isArray(p.grid_pos)) {
+                row = p.grid_pos[0];
+                col = p.grid_pos[1];
+              }
+              const x = col * cellW;
+              const y = row * cellH;
+              ctx.fillRect(x + 2, y + 2, cellW - 4, cellH - 4);
+              ctx.strokeRect(x + 2, y + 2, cellW - 4, cellH - 4);
+            });
+          }
+        };
+
+        if (img.complete && img.naturalWidth) {
+          setTimeout(renderOverlay, 50);
+        } else {
+          img.onload = () => setTimeout(renderOverlay, 50);
+        }
+      }
+      
+      if (stats) {
+        stats.innerHTML = `
+          <div style="background:#0f2a1a;
+                      border:1px solid #1a4a2a;
+                      border-radius:8px;padding:10px">
+            <div style="font-size:13px;font-weight:500;
+                        color:#22c55e;margin-bottom:6px">
+              ✓ ${data.panels_detected} panel zones detected
+            </div>
+            <div style="font-size:12px;color:#9ca3af">
+              Coverage: ~${data.coverage_pct.toFixed(1)}%
+              of scanned area
+            </div>
+            <div style="font-size:10px;color:#4b5563;
+                        margin-top:4px">
+              Green boxes = detected solar zones
+            </div>
+          </div>`;
+        stats.style.display = 'block';
+      }
+    } else {
+      if (stats) {
+        stats.innerHTML = `
+          <div style="font-size:12px;color:#ef4444;padding:8px">
+            Detection unavailable: ${data.message || 'Unknown error'}
+          </div>`;
+        stats.style.display = 'block';
+      }
+    }
+    
+  } catch(e) {
+    if (loading) loading.style.display = 'none';
+    if (stats) {
+      stats.innerHTML = `
+        <div style="font-size:12px;color:#ef4444;padding:8px">
+          Detection unavailable: ${e.message}
+        </div>`;
+      stats.style.display = 'block';
+    }
+  }
+}
 
 // FortyGuard Heatmap Tiles Layer & Cache
 const farmHeatmapCache = {};

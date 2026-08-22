@@ -1,13 +1,18 @@
 """API routes for SolGrid Thermal Sync."""
 
+import base64
+import io
+import math
 import os
 import sys
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 
 import pandas as pd
+import requests
 from flask import Blueprint, jsonify, request
 from groq import Groq
+from PIL import Image
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 sys.path.insert(0, 'C:/Users/jjdcr/Desktop/VS_code/temperature-api-quickstart')
@@ -578,5 +583,92 @@ def get_heatmap_tiles():
             'message': str(e),
             'tiles': []
         }), 200
+
+
+def lon2tile(lon, zoom):
+    return int((lon + 180.0) / 360.0 * (2**zoom))
+
+
+def lat2tile(lat, zoom):
+    return int((1.0 - math.log(
+        math.tan(math.radians(lat)) +
+        1 / math.cos(math.radians(lat))
+    ) / math.pi) / 2.0 * (2**zoom))
+
+
+@bp.route('/satellite-detect', methods=['POST'])
+def satellite_detect():
+    try:
+        data = request.get_json(silent=True) or {}
+        lat = float(data.get('lat', 32.9667))
+        lon = float(data.get('lon', -113.5000))
+        zoom = int(data.get('zoom', 17))
+
+        GOOGLE_MAPS_KEY = os.getenv('GOOGLE_MAPS_KEY', '')
+        img_bytes = None
+
+        if GOOGLE_MAPS_KEY and GOOGLE_MAPS_KEY != 'your_key_here':
+            try:
+                sat_url = (
+                    f"https://maps.googleapis.com/maps/api/"
+                    f"staticmap?center={lat},{lon}"
+                    f"&zoom={zoom}&size=640x640"
+                    f"&maptype=satellite"
+                    f"&key={GOOGLE_MAPS_KEY}"
+                )
+                img_response = requests.get(sat_url, timeout=10)
+                if img_response.status_code == 200 and len(img_response.content) > 1000:
+                    img_bytes = img_response.content
+            except Exception as e:
+                print(f"Google Maps API fetch error: {e}")
+
+        # If no Google Maps key, attempt ArcGIS optical satellite imagery tile fetch
+        if not img_bytes:
+            try:
+                arcgis_zoom = min(max(zoom, 10), 16)
+                tile_x = lon2tile(lon, arcgis_zoom)
+                tile_y = lat2tile(lat, arcgis_zoom)
+                sat_url = f"https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{arcgis_zoom}/{tile_y}/{tile_x}"
+                headers = {'User-Agent': 'SolGridThermalSync/1.0 (contact@solgrid.ai)'}
+                res = requests.get(sat_url, headers=headers, timeout=5)
+                if res.status_code == 200 and len(res.content) > 1000:
+                    img_bytes = res.content
+            except Exception as e:
+                print(f"ArcGIS satellite fetch error: {e}")
+
+        # Fallback to local high-res sample satellite image
+        if not img_bytes:
+            sample_path = Path(__file__).resolve().parent.parent / 'data' / 'sample_satellite.jpg'
+            if sample_path.exists():
+                with open(sample_path, 'rb') as f:
+                    img_bytes = f.read()
+            else:
+                with open('data/sample_satellite.jpg', 'rb') as f:
+                    img_bytes = f.read()
+
+        img_b64 = base64.b64encode(img_bytes).decode()
+
+        from backend.solar_detector import detect_solar_panels
+        panels = detect_solar_panels(img_bytes, lat, lon, zoom)
+
+        return jsonify({
+            'status': 'success',
+            'image_b64': img_b64,
+            'panels_detected': len(panels),
+            'panel_polygons': panels,
+            'coverage_pct': min(
+                len(panels) * 2.5, 85.0
+            ),
+            'lat': lat,
+            'lon': lon,
+            'zoom': zoom
+        })
+
+    except Exception as e:
+        return jsonify({
+            'status': 'error',
+            'message': str(e)
+        }), 200
+
 
 
