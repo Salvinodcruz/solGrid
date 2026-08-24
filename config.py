@@ -24,8 +24,7 @@ PANEL_CAPACITY_KW = 250    # installed DC capacity (kW)
 TEMP_COEFFICIENT = -0.004 # efficiency loss per C above STC
 STC_TEMP = 25             # standard test condition temp (C)
 
-# Economics
-ELECTRICITY_RATE_USD = 0.12  # USD per kWh
+
 
 # API credentials
 FORTYGUARD_API_KEY = os.getenv("FORTYGUARD_API_KEY")
