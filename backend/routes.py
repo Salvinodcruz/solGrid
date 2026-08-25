@@ -421,6 +421,7 @@ Give a sharp, technical analysis with:
 4. LONG TERM STRATEGY (3-5 year capital plan)
 5. EXECUTIVE SUMMARY (one sentence for the asset owner)
 
+Format your response with clear, short bullet points, clean section titles, and no dense walls of text.
 Be specific with numbers and dollar figures.
 Keep total response under 400 words."""
 

@@ -404,6 +404,7 @@ async function analyzeBuilding(building) {
 
   // Update card static details immediately
   document.getElementById('building-name').textContent = building.label;
+  updateInterventionCardTitles(building);
 
   const addressEl = document.getElementById('building-address');
   if (addressEl) {
@@ -577,13 +578,66 @@ async function analyzeBuilding(building) {
   }
 }
 
+// Dynamic Intervention Cost Calculations
+function getDynamicInterventionCosts(panelCount) {
+  const count = panelCount || 50000;
+  const albedoCost = Math.round(count * 20);
+  const mistingCost = Math.round(2000 + (count * 15));
+  const ventilationCost = Math.round(1000 + (count * 10));
+  return { albedoCost, mistingCost, ventilationCost };
+}
+
+function formatCostLabel(val) {
+  if (val >= 1000000) return `$${(val / 1000000).toFixed(2)}M`;
+  if (val >= 1000) return `$${(val / 1000).toFixed(0)}k`;
+  return `$${val}`;
+}
+
+function updateInterventionCardTitles(buildingOrCount) {
+  let panelCount = 50000;
+  if (typeof buildingOrCount === 'number') {
+    panelCount = buildingOrCount;
+  } else if (buildingOrCount && typeof buildingOrCount === 'object') {
+    panelCount = buildingOrCount.panel_count || 
+      (buildingOrCount.panel_area_m2 ? Math.round(buildingOrCount.panel_area_m2 / 2) : 
+      (buildingOrCount.rated_kw ? Math.round(buildingOrCount.rated_kw / 0.4) : 50000));
+  } else if (selectedBuilding || currentBuilding) {
+    const b = selectedBuilding || currentBuilding;
+    panelCount = b.panel_count || 
+      (b.panel_area_m2 ? Math.round(b.panel_area_m2 / 2) : 
+      (b.rated_kw ? Math.round(b.rated_kw / 0.4) : 50000));
+  }
+
+  const { albedoCost, mistingCost, ventilationCost } = getDynamicInterventionCosts(panelCount);
+
+  const albedoEl = document.getElementById('albedo-card-title');
+  if (albedoEl) {
+    albedoEl.textContent = `Albedo Coating (${formatCostLabel(albedoCost)})`;
+  }
+
+  const mistingEl = document.getElementById('misting-card-title');
+  if (mistingEl) {
+    mistingEl.textContent = `Smart Misting (${formatCostLabel(mistingCost)})`;
+  }
+
+  const ventEl = document.getElementById('ventilation-card-title');
+  if (ventEl) {
+    ventEl.textContent = `Forced Ventilation (${formatCostLabel(ventilationCost)})`;
+  }
+}
+
 // 4. What-If Simulator (POST /simulate)
 async function runSimulation() {
   if (!selectedBuilding) return;
+  updateInterventionCardTitles(selectedBuilding);
 
-  const newAlbedo = parseFloat(document.getElementById('slider-albedo').value);
-  const mistingIntensity = parseFloat(document.getElementById('slider-misting').value);
-  const forcedWind = parseFloat(document.getElementById('slider-vent').value);
+  const albedoSlider = document.getElementById('slider-albedo') || document.getElementById('albedo-slider');
+  const mistingSlider = document.getElementById('slider-misting') || document.getElementById('misting-slider');
+  const ventSlider = document.getElementById('slider-vent') || document.getElementById('ventilation-slider');
+
+  const newAlbedo = albedoSlider ? parseFloat(albedoSlider.value) : 0.10;
+  const mistingIntensity = mistingSlider ? parseFloat(mistingSlider.value) : 0.0;
+  const forcedWind = ventSlider ? parseFloat(ventSlider.value) : 0.0;
 
   const payload = {
     ...selectedBuilding,
@@ -628,17 +682,41 @@ async function runSimulation() {
     const savedDiffEl = document.getElementById('sim-saved-diff');
     if (savedDiffEl) savedDiffEl.textContent = `(+$${recoveredUsd.toLocaleString()} saved)`;
 
-    // Payback months
-    const pb = data.payback_months || {};
-    const formatPayback = (val) => {
-      if (val == null) return 'N/A';
-      if (val < 0.1) return '< 0.1 mos';
-      if (val < 1.0) return `${val.toFixed(1)} mos`;
-      return `${Math.round(val)} mos`;
+    // Check individual intervention active states
+    const baseAlbedo = (selectedBuilding && selectedBuilding.albedo != null) ? selectedBuilding.albedo : 0.10;
+    const isAlbedoActive = newAlbedo > baseAlbedo + 0.001 || (baseAlbedo <= 0.10 && newAlbedo > 0.10);
+    const isMistingActive = mistingIntensity > 0;
+    const isVentActive = forcedWind > 0;
+
+    // Get dynamic intervention costs based on panel count
+    const panelCount = selectedBuilding ? (selectedBuilding.panel_count || 
+      (selectedBuilding.panel_area_m2 ? Math.round(selectedBuilding.panel_area_m2 / 2) : 
+      (selectedBuilding.rated_kw ? Math.round(selectedBuilding.rated_kw / 0.4) : 50000))) : 50000;
+    const { albedoCost, mistingCost, ventilationCost } = getDynamicInterventionCosts(panelCount);
+
+    const monthlySavings = recoveredUsd;
+
+    // Format payback: only show payback if intervention is active and monthly savings > 0
+    const formatPayback = (cost, isActive) => {
+      if (!isActive || monthlySavings <= 0) return 'N/A';
+      const months = (cost / monthlySavings).toFixed(1);
+      return `${months} mos`;
     };
-    document.getElementById('payback-albedo').textContent = formatPayback(pb.albedo_coating);
-    document.getElementById('payback-misting').textContent = formatPayback(pb.misting_system);
-    document.getElementById('payback-vent').textContent = formatPayback(pb.forced_ventilation);
+
+    const paybackAlbedoEl = document.getElementById('payback-albedo');
+    if (paybackAlbedoEl) {
+      paybackAlbedoEl.textContent = formatPayback(albedoCost, isAlbedoActive);
+    }
+
+    const paybackMistingEl = document.getElementById('payback-misting');
+    if (paybackMistingEl) {
+      paybackMistingEl.textContent = formatPayback(mistingCost, isMistingActive);
+    }
+
+    const paybackVentEl = document.getElementById('payback-vent') || document.getElementById('payback-ventilation');
+    if (paybackVentEl) {
+      paybackVentEl.textContent = formatPayback(ventilationCost, isVentActive);
+    }
   } catch (err) {
     console.error('Error running simulation:', err);
   }
@@ -899,6 +977,72 @@ function setupRefreshButton() {
   });
 }
 
+// Markdown parser with marked.js integration, clean fallback, and asterisks replacement
+function renderMarkdownToHtml(markdown) {
+  if (!markdown) return '';
+  let html = '';
+  
+  if (typeof marked !== 'undefined' && typeof marked.parse === 'function') {
+    try {
+      if (typeof marked.setOptions === 'function') {
+        marked.setOptions({
+          gfm: true,
+          breaks: true
+        });
+      }
+      html = marked.parse(markdown);
+    } catch (err) {
+      console.warn('Marked parse error, falling back to regex parser:', err);
+      html = '';
+    }
+  }
+
+  // Fallback regex parser if marked.js is unavailable
+  if (!html) {
+    let text = String(markdown)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;');
+
+    // Headers
+    text = text.replace(/^### (.*$)/gim, '<h3>$1</h3>');
+    text = text.replace(/^## (.*$)/gim, '<h2>$1</h2>');
+    text = text.replace(/^# (.*$)/gim, '<h1>$1</h1>');
+
+    // Bold tags: **text** -> <strong>text</strong>
+    text = text.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+
+    // Italic tags: *text* or _text_ -> <em>text</em>
+    text = text.replace(/\*(.*?)\*/g, '<em>$1</em>');
+
+    // Dividers: --- -> <hr>
+    text = text.replace(/^(?:---|\*\*\*|___)\s*$/gim, '<hr>');
+
+    // Bullet lists
+    text = text.replace(/^\s*[-*]\s+(.*$)/gim, '<li>$1</li>');
+    text = text.replace(/(<li>.*<\/li>)/gms, '<ul>$1</ul>');
+
+    // Numbered lists
+    text = text.replace(/^\s*(\d+)\.\s+(.*$)/gim, '<p><strong>$1.</strong> $2</p>');
+
+    // Paragraph splits
+    text = text.split(/\n\n+/).map(p => {
+      p = p.trim();
+      if (p.startsWith('<h1>') || p.startsWith('<h2>') || p.startsWith('<h3>') || p.startsWith('<ul>') || p.startsWith('<hr>') || p.startsWith('<p>')) {
+        return p;
+      }
+      return `<p>${p.replace(/\n/g, '<br>')}</p>`;
+    }).join('');
+
+    html = text;
+  }
+
+  // Post-processing: Ensure all raw asterisks **bold** are cleanly transformed to <strong>
+  html = html.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+
+  return html;
+}
+
 // 8. AI Thermal Recommendation (POST /ai-recommend)
 async function getAIRecommendation() {
   if (!currentBuilding || !currentMetrics) {
@@ -933,17 +1077,17 @@ async function getAIRecommendation() {
     );
 
     const data = await res.json();
-    const aiText = document.getElementById('ai-text');
-    if (aiText) {
-      aiText.textContent = data.recommendation;
+    const aiOutputContainer = document.getElementById('ai-output') || document.getElementById('ai-text');
+    if (aiOutputContainer) {
+      aiOutputContainer.innerHTML = renderMarkdownToHtml(data.recommendation || '');
     }
     if (loading) loading.style.display = 'none';
     if (response) response.style.display = 'block';
 
   } catch (e) {
-    const aiText = document.getElementById('ai-text');
-    if (aiText) {
-      aiText.textContent = 'AI analysis unavailable. Check your Groq API key.';
+    const aiOutputContainer = document.getElementById('ai-output') || document.getElementById('ai-text');
+    if (aiOutputContainer) {
+      aiOutputContainer.innerHTML = '<p style="color:#ef4444;">AI analysis unavailable. Check your Groq API key.</p>';
     }
     if (loading) loading.style.display = 'none';
     if (response) response.style.display = 'block';
@@ -959,6 +1103,10 @@ window.FARM_BOUNDARIES = FARM_BOUNDARIES;
 window.showFarmThermalOverlay = showFarmThermalOverlay;
 window.addThermalGradientInside = addThermalGradientInside;
 window.toggleSatellite = toggleSatellite;
+window.getDynamicInterventionCosts = getDynamicInterventionCosts;
+window.formatCostLabel = formatCostLabel;
+window.updateInterventionCardTitles = updateInterventionCardTitles;
+window.renderMarkdownToHtml = renderMarkdownToHtml;
 
 /**
  * FIX 2: Replace heatmap with exact polygon fill

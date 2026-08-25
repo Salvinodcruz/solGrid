@@ -17,6 +17,9 @@
   <!-- Plotly JS -->
   <script src="https://cdn.plot.ly/plotly-2.32.0.min.js"></script>
 
+  <!-- Marked.js Markdown Parser -->
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+
   <!-- Application CSS -->
   <link rel="stylesheet" href="style.css">
 </head>
@@ -273,15 +276,15 @@
 
         <div class="payback-grid">
           <div class="payback-item">
-            <span class="p-name">Albedo Coating ($15k)</span>
+            <span id="albedo-card-title" class="p-name">Albedo Coating</span>
             <span id="payback-albedo" class="p-value">-- mos</span>
           </div>
           <div class="payback-item">
-            <span class="p-name">Smart Misting ($12k)</span>
+            <span id="misting-card-title" class="p-name">Smart Misting</span>
             <span id="payback-misting" class="p-value">-- mos</span>
           </div>
           <div class="payback-item">
-            <span class="p-name">Forced Ventilation ($5k)</span>
+            <span id="ventilation-card-title" class="p-name">Forced Ventilation</span>
             <span id="payback-vent" class="p-value">-- mos</span>
           </div>
         </div>
@@ -309,7 +312,7 @@
             <span class="ai-badge">SolGrid AI</span>
             <span class="ai-model">llama-3.1</span>
           </div>
-          <div id="ai-text" class="ai-text"></div>
+          <div id="ai-output" class="ai-text"></div>
           <button class="ai-refresh" 
                   onclick="getAIRecommendation()">
             ↻ Refresh analysis
