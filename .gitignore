@@ -8,3 +8,5 @@ data/*.csv
 frontend/config.js
 scratch/
 .claude/
+*.pt
+backend/models/*.pt

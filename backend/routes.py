@@ -602,79 +602,70 @@ def lat2tile(lat, zoom):
     ) / math.pi) / 2.0 * (2**zoom))
 
 
-@bp.route('/satellite-detect', methods=['POST'])
-def satellite_detect():
+@bp.route('/detect-panels', methods=['POST'])
+def detect_panels_endpoint():
+    """
+    High-resolution satellite panel detection endpoint.
+    Takes map viewport bounding box [min_lng, min_lat, max_lng, max_lat] or center (lat, lng, zoom),
+    fetches and stitches a 2x2 (or 3x3) grid of 1280x1280@2x Mapbox tiles into a composite buffer (e.g. 2560x2560),
+    and executes multi-tile sliding-window YOLOv8 segmentation with continuous contour GeoJSON extraction.
+    """
     try:
         data = request.get_json(silent=True) or {}
-        lat = float(data.get('lat', 32.9667))
-        lon = float(data.get('lon', -113.5000))
-        zoom = int(data.get('zoom', 17))
+        lat = data.get('lat')
+        lng = data.get('lng') or data.get('lon')
+        zoom = data.get('zoom', 17)
+        bbox = data.get('bbox') or data.get('bounds')
+        grid_size = int(data.get('grid_size', 2))
 
-        GOOGLE_MAPS_KEY = os.getenv('GOOGLE_MAPS_KEY', '')
-        img_bytes = None
+        # Default coordinates to Phoenix if missing
+        if lat is None and lng is None and not bbox:
+            lat = 33.4484
+            lng = -112.0740
 
-        if GOOGLE_MAPS_KEY and GOOGLE_MAPS_KEY != 'your_key_here':
-            try:
-                sat_url = (
-                    f"https://maps.googleapis.com/maps/api/"
-                    f"staticmap?center={lat},{lon}"
-                    f"&zoom={zoom}&size=640x640"
-                    f"&maptype=satellite"
-                    f"&key={GOOGLE_MAPS_KEY}"
-                )
-                img_response = requests.get(sat_url, timeout=10)
-                if img_response.status_code == 200 and len(img_response.content) > 1000:
-                    img_bytes = img_response.content
-            except Exception as e:
-                print(f"Google Maps API fetch error: {e}")
+        if bbox and len(bbox) == 4:
+            lat = (float(bbox[1]) + float(bbox[3])) / 2.0
+            lng = (float(bbox[0]) + float(bbox[2])) / 2.0
+        else:
+            lat = float(lat)
+            lng = float(lng)
+            bbox = None
 
-        # If no Google Maps key, attempt ArcGIS optical satellite imagery tile fetch
-        if not img_bytes:
-            try:
-                arcgis_zoom = min(max(zoom, 10), 16)
-                tile_x = lon2tile(lon, arcgis_zoom)
-                tile_y = lat2tile(lat, arcgis_zoom)
-                sat_url = f"https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{arcgis_zoom}/{tile_y}/{tile_x}"
-                headers = {'User-Agent': 'SolGridThermalSync/1.0 (contact@solgrid.ai)'}
-                res = requests.get(sat_url, headers=headers, timeout=5)
-                if res.status_code == 200 and len(res.content) > 1000:
-                    img_bytes = res.content
-            except Exception as e:
-                print(f"ArcGIS satellite fetch error: {e}")
-
-        # Fallback to local high-res sample satellite image
-        if not img_bytes:
-            sample_path = Path(__file__).resolve().parent.parent / 'data' / 'sample_satellite.jpg'
-            if sample_path.exists():
-                with open(sample_path, 'rb') as f:
-                    img_bytes = f.read()
-            else:
-                with open('data/sample_satellite.jpg', 'rb') as f:
-                    img_bytes = f.read()
-
-        img_b64 = base64.b64encode(img_bytes).decode()
+        zoom = int(zoom)
+        mapbox_token = os.getenv('MAPBOX_TOKEN', '')
 
         from backend.solar_detector import detect_solar_panels
-        panels = detect_solar_panels(img_bytes, lat, lon, zoom)
+        result = detect_solar_panels(
+            lat=lat,
+            lng=lng,
+            zoom=zoom,
+            mapbox_token=mapbox_token,
+            bbox=bbox,
+            grid_size=grid_size,
+            tile_size=640,
+            retina=True
+        )
 
         return jsonify({
             'status': 'success',
-            'image_b64': img_b64,
-            'panels_detected': len(panels),
-            'panel_polygons': panels,
-            'coverage_pct': min(
-                len(panels) * 2.5, 85.0
-            ),
-            'lat': lat,
-            'lon': lon,
-            'zoom': zoom
+            **result
         })
 
     except Exception as e:
+        print(f"Panel detection endpoint error: {e}")
         return jsonify({
             'status': 'error',
-            'message': str(e)
+            'message': str(e),
+            'panel_count': 0,
+            'geojson_features': []
         }), 200
+
+
+@bp.route('/satellite-detect', methods=['POST'])
+def satellite_detect():
+    """Legacy endpoint wrapper for backward compatibility."""
+    return detect_panels_endpoint()
+
 
 
 

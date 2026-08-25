@@ -573,6 +573,9 @@ async function analyzeBuilding(building) {
     // Show exact thermal polygon overlay and concentric gradient inside farm boundary
     showFarmThermalOverlay(building, data);
     addThermalGradientInside(building, data);
+
+    // AI YOLOv8 Solar Panel Detection & Render
+    detectAndRenderPanels(building);
   } catch (err) {
     console.error('Error analyzing building:', err);
   }
@@ -1330,6 +1333,158 @@ function addThermalGradientInside(building, metrics) {
   }
 }
 
+// 9. AI Panel Detection & GeoJSON Rendering (YOLOv8 + Fallback)
+let lastDetectionGeoJSON = null;
+let lastDetectionData = null;
+
+function renderDetectionLayers(geojson) {
+  if (!geojson || !map) return;
+  if (map.getSource('solar-detections')) {
+    map.getSource('solar-detections').setData(geojson);
+  } else {
+    map.addSource('solar-detections', {
+      type: 'geojson',
+      data: geojson
+    });
+
+    map.addLayer({
+      id: 'solar-polygons-fill',
+      type: 'fill',
+      source: 'solar-detections',
+      paint: {
+        'fill-color': '#f97316',
+        'fill-opacity': 0.35
+      }
+    });
+
+    map.addLayer({
+      id: 'solar-polygons-outline',
+      type: 'line',
+      source: 'solar-detections',
+      paint: {
+        'line-color': '#f97316',
+        'line-width': 1.5,
+        'line-opacity': 0.9
+      }
+    });
+  }
+}
+
+async function detectAndRenderPanels(building, autoSwitchSatellite = false) {
+  if (!building) return;
+  const coords = building.coordinates || [building.lng, building.lat];
+  if (!coords || coords.length < 2) return;
+  const lng = coords[0];
+  const lat = coords[1];
+
+  console.log(`Running YOLO detection for ${building.label || 'Solar Farm'}`);
+
+  // Switch to satellite view if requested and not active
+  if (autoSwitchSatellite && !satelliteMode) {
+    toggleSatellite();
+  }
+
+  // Extract current map viewport bounding box if available
+  let bbox = null;
+  let zoomLevel = 16;
+  if (typeof map !== 'undefined' && map && typeof map.getBounds === 'function') {
+    const bounds = map.getBounds();
+    if (bounds) {
+      bbox = [
+        bounds.getWest(),
+        bounds.getSouth(),
+        bounds.getEast(),
+        bounds.getNorth()
+      ];
+    }
+    if (typeof map.getZoom === 'function') {
+      zoomLevel = Math.round(map.getZoom());
+    }
+  }
+
+  try {
+    const res = await fetch(`${API_BASE}/detect-panels`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ 
+        lat, 
+        lng, 
+        zoom: zoomLevel || 16,
+        bbox,
+        grid_size: 2
+      })
+    });
+
+    const data = await res.json();
+
+    if (data.status !== 'success' || !data.geojson_features || !data.geojson_features.length) {
+      console.log('No panels detected');
+      return;
+    }
+
+    console.log(
+      `Detected ${data.panel_count} panel arrays, ` +
+      `${data.total_surface_area_m2}m², ` +
+      `model: ${data.model_used}`
+    );
+
+    const geojson = {
+      type: 'FeatureCollection',
+      features: data.geojson_features
+    };
+    lastDetectionGeoJSON = geojson;
+    lastDetectionData = data;
+
+    renderDetectionLayers(geojson);
+
+    const detectedArea = data.total_surface_area_m2;
+    const panelCount = data.panel_count;
+
+    const existingBadge = document.getElementById('detection-badge');
+    if (existingBadge) existingBadge.remove();
+
+    const badge = document.createElement('div');
+    badge.id = 'detection-badge';
+    badge.style.cssText = `
+      position: absolute;
+      bottom: 80px;
+      left: 12px;
+      background: rgba(10,14,26,0.9);
+      border: 1px solid #f97316;
+      border-radius: 8px;
+      padding: 8px 12px;
+      font-size: 11px;
+      color: #f9fafb;
+      z-index: 10;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.5);
+    `;
+    badge.innerHTML = `
+      <div style="color:#f97316;font-weight:500;margin-bottom:4px">
+        ⚡ AI Panel Detection
+      </div>
+      <div>${panelCount} arrays detected</div>
+      <div>${Number(detectedArea).toLocaleString()} m² solar area</div>
+      <div style="font-size:9px;color:#9ca3af;margin-top:3px">
+        Model: ${data.model_used}
+      </div>
+    `;
+
+    const mapContainer = document.getElementById('map') || document.querySelector('.map-panel');
+    if (mapContainer) mapContainer.appendChild(badge);
+
+    map.flyTo({
+      center: [lng, lat],
+      zoom: 14,
+      duration: 2000
+    });
+
+  } catch(e) {
+    console.error('Panel detection error:', e);
+  }
+}
+
 // Satellite basemap toggle
 let satelliteMode = false;
 function toggleSatellite() {
@@ -1348,7 +1503,7 @@ function toggleSatellite() {
   }
 
   map.once('style.load', () => {
-    console.log('New basemap style loaded. Re-attaching farm thermal overlays.');
+    console.log('New basemap style loaded. Re-attaching farm thermal overlays and AI panel detections.');
     // Re-attach base thermal polygons for all 5 farms
     BUILDINGS.forEach(b => {
       const fakeMetrics = { 
@@ -1364,6 +1519,9 @@ function toggleSatellite() {
       const metrics = currentMetrics || { risk_score: current.risk };
       showFarmThermalOverlay(current, metrics, false);
       addThermalGradientInside(current, metrics);
+      if (lastDetectionGeoJSON) {
+        renderDetectionLayers(lastDetectionGeoJSON);
+      }
     }
   });
 }
