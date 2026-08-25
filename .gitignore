@@ -6,8 +6,5 @@ models/*.pkl
 data/*.csv
 .ipynb_checkpoints/
 frontend/config.js
-scratch/node_modules/
-
-__pycache__/
-
+scratch/
 .claude/
