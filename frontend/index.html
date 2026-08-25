@@ -38,14 +38,14 @@
         <span class="logo-tagline">Utility-Scale Solar Thermal Intelligence</span>
       </div>
     </div>
-    <div class="navbar-right">
-      <button id="btn-refresh-live" class="btn-refresh" title="Query FortyGuard API for latest Arizona heat and solar data">
+    <div class="navbar-right header-actions">
+      <button id="refresh-btn" class="btn-refresh" title="Query FortyGuard API for latest Arizona heat and solar data">
         <svg class="refresh-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
           <path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/>
         </svg>
         <span id="refresh-btn-text">Refresh Live Data</span>
       </button>
-      <span id="navbar-badge" class="badge-tag">SonShield | FortyGuard 2026</span>
+      <span id="navbar-badge" class="badge-tag">LIVE — Arizona Solar Belt</span>
     </div>
   </header>
 
@@ -55,11 +55,11 @@
     <section class="map-panel">
       <div id="map"></div>
       <div class="map-controls">
-        <button id="satellite-btn" onclick="toggleSatellite()">
+        <button id="satellite-btn" class="map-style-btn map-style-toggle" onclick="toggleSatellite()">
           🛰 Satellite view
         </button>
       </div>
-      <div class="legend map-overlay-legend">
+      <div id="thermal-legend" class="legend map-overlay-legend">
         <div class="legend-title">THERMAL LOSS INTENSITY</div>
         <div class="legend-gradient"></div>
         <div class="legend-labels">

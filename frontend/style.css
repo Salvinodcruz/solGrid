@@ -94,12 +94,12 @@ body {
   height: 64px;
   min-height: 64px;
   background: linear-gradient(135deg, #0a0e1a 0%, #111827 100%);
-  border-bottom: 1px solid #f97316;
+  border-bottom: 1px solid rgba(249, 115, 22, 0.35);
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0 1.75rem;
+  padding: 0 1.5rem;
   z-index: 50;
 }
 
@@ -149,6 +149,55 @@ body {
   letter-spacing: 0.02em;
 }
 
+.navbar-right,
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+#refresh-btn,
+.btn-refresh {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 6px;
+  padding: 6px 14px;
+  color: #f3f4f6;
+  font-family: var(--font-system);
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  transition: all 0.2s ease;
+}
+
+#refresh-btn:hover,
+.btn-refresh:hover {
+  background: rgba(249, 115, 22, 0.15);
+  border-color: #f97316;
+  color: #ffffff;
+}
+
+#refresh-btn:active,
+.btn-refresh:active {
+  transform: translateY(0);
+}
+
+#refresh-btn.loading,
+.btn-refresh.loading {
+  opacity: 0.75;
+  cursor: not-allowed;
+}
+
+#refresh-btn.loading .refresh-icon,
+.btn-refresh.loading .refresh-icon {
+  animation: spin 1s infinite linear;
+}
+
 .badge-tag {
   font-size: 0.8rem;
   font-weight: 600;
@@ -159,6 +208,8 @@ body {
   border: 1px solid var(--brand-orange-border);
   box-shadow: 0 0 12px rgba(249, 115, 22, 0.15);
   letter-spacing: 0.02em;
+  display: inline-flex;
+  align-items: center;
 }
 
 /* ==========================================================================
@@ -168,8 +219,8 @@ body {
   display: flex;
   height: calc(100vh - 64px);
   width: 100%;
-  padding: 1.25rem;
-  gap: 1.25rem;
+  padding: 16px;
+  gap: 16px;
   overflow: hidden;
 }
 
@@ -178,15 +229,22 @@ body {
   flex: 0 0 42%;
   height: 100%;
   position: relative;
-  border-radius: var(--radius-xl);
+  border-radius: 12px;
   overflow: hidden;
   background-color: #070B14;
   background-image: 
     linear-gradient(rgba(31,41,55,0.3) 1px, transparent 1px),
     linear-gradient(90deg, rgba(31,41,55,0.3) 1px, transparent 1px);
   background-size: 40px 40px;
-  border: var(--glass-border);
-  box-shadow: var(--glass-shadow);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.35);
+}
+
+/* Ensure map container has relative positioning so absolute works correctly */
+#map,
+.map-container,
+.map-panel {
+  position: relative;
 }
 
 #map {
@@ -201,40 +259,127 @@ body {
 
 /* Map Controls */
 .map-controls {
-  position: absolute;
-  top: 50px;
-  right: 10px;
-  z-index: 10;
+  position: absolute !important;
+  top: 12px !important;
+  right: 56px !important;
+  z-index: 20 !important;
 }
-#satellite-btn {
-  background: rgba(10,14,26,0.85);
-  border: 1px solid #374151;
-  color: #9ca3af;
-  padding: 6px 12px;
-  border-radius: 6px;
-  font-size: 11px;
-  cursor: pointer;
-  transition: all 0.2s ease;
+
+.map-style-btn, 
+#style-toggle,
+#satellite-btn,
+.map-style-toggle,
+button[onclick*="toggleSatellite"],
+button[onclick*="toggleStyle"] {
+  position: absolute !important;
+  top: 12px !important;
+  right: 56px !important; /* Shifted left to clear the + / - zoom control box */
+  z-index: 20 !important;
+  background: rgba(15, 23, 42, 0.85) !important;
+  backdrop-filter: blur(8px) !important;
+  -webkit-backdrop-filter: blur(8px) !important;
+  border: 1px solid rgba(255, 255, 255, 0.2) !important;
+  border-radius: 6px !important;
+  color: #f8fafc !important;
+  padding: 6px 12px !important;
+  font-size: 12px !important;
+  font-weight: 500 !important;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4) !important;
+  cursor: pointer !important;
+  transition: all 0.2s ease !important;
+  white-space: nowrap !important;
+  display: flex !important;
+  align-items: center !important;
+  gap: 6px !important;
 }
-#satellite-btn:hover {
-  border-color: #f97316;
-  color: #f97316;
+
+.map-style-btn:hover, 
+#style-toggle:hover,
+#satellite-btn:hover,
+.map-style-toggle:hover,
+button[onclick*="toggleSatellite"]:hover,
+button[onclick*="toggleStyle"]:hover {
+  background: rgba(249, 115, 22, 0.15) !important;
+  border-color: #f97316 !important;
+  color: #f97316 !important;
+}
+
+/* Mapbox Navigation Controls */
+.mapboxgl-ctrl-top-right {
+  top: 10px !important;
+  right: 10px !important;
+}
+
+.mapboxgl-ctrl-group {
+  background: rgba(15, 23, 42, 0.85) !important;
+  border: 1px solid rgba(255, 255, 255, 0.15) !important;
+  backdrop-filter: blur(8px) !important;
+  -webkit-backdrop-filter: blur(8px) !important;
+  border-radius: 6px !important;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4) !important;
+  overflow: hidden;
+}
+
+.mapboxgl-ctrl-group button {
+  width: 29px !important;
+  height: 29px !important;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08) !important;
+  background-color: transparent !important;
+}
+
+.mapboxgl-ctrl-group button:last-child {
+  border-bottom: none !important;
+}
+
+.mapboxgl-ctrl-group button:hover {
+  background-color: rgba(255, 255, 255, 0.1) !important;
+}
+
+.mapboxgl-ctrl-group button .mapboxgl-ctrl-icon {
+  filter: invert(1) brightness(0.85);
+}
+
+/* Mapbox Attribution styling */
+.mapboxgl-ctrl-attrib {
+  padding: 2px 6px !important;
+  background-color: rgba(15, 23, 42, 0.7) !important;
+  backdrop-filter: blur(4px) !important;
+  -webkit-backdrop-filter: blur(4px) !important;
+  font-size: 9px !important;
+  border-radius: 4px !important;
+  border: 1px solid rgba(255, 255, 255, 0.06) !important;
+}
+
+.mapboxgl-ctrl-attrib a {
+  color: #64748b !important;
+  text-decoration: none !important;
+}
+
+.mapboxgl-ctrl-attrib a:hover {
+  color: #94a3b8 !important;
+  text-decoration: underline !important;
+}
+
+.mapboxgl-ctrl-bottom-right {
+  bottom: 8px !important;
+  right: 8px !important;
 }
 
 /* Map Legend Overlay */
+#thermal-legend,
 .map-overlay-legend,
 .legend {
   position: absolute;
-  bottom: 20px;
-  left: 20px;
-  background: rgba(15, 23, 42, 0.85);
-  backdrop-filter: var(--glass-filter-heavy);
-  -webkit-backdrop-filter: var(--glass-filter-heavy);
-  border: 1px solid #1e293b;
-  border-radius: var(--radius-md);
-  padding: 12px 16px;
-  box-shadow: var(--glass-shadow-sm);
+  bottom: 16px;
+  left: 16px;
   z-index: 10;
+  background: rgba(15, 23, 42, 0.85);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  padding: 10px 14px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
   pointer-events: auto;
 }
 
@@ -352,10 +497,10 @@ body {
   height: 100%;
   overflow-y: auto;
   overflow-x: hidden;
-  padding-right: 4px;
+  padding-right: 6px;
   display: flex;
   flex-direction: column;
-  gap: 1.25rem;
+  gap: 16px;
 }
 
 /* Apple Sleek Scrollbar */
@@ -378,20 +523,20 @@ body {
    ========================================================================== */
 .card {
   background: #0f172a;
-  border: 1px solid #1e293b;
-  border-radius: var(--radius-lg);
-  box-shadow: var(--glass-shadow);
-  padding: 1.35rem 1.5rem;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 12px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25);
+  padding: 16px;
   display: flex;
   flex-direction: column;
-  gap: 1.1rem;
-  transition: all 0.3s ease;
+  gap: 14px;
+  transition: all 0.2s ease;
 }
 
 .card:hover {
-  border: 1px solid #334155;
-  box-shadow: var(--glass-shadow-lg), 0 0 20px rgba(249, 115, 22, 0.12);
-  transform: translateY(-2px);
+  border-color: rgba(255, 255, 255, 0.15);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35), 0 0 16px rgba(249, 115, 22, 0.08);
+  transform: translateY(-1px);
 }
 
 .card-header {
@@ -1129,49 +1274,7 @@ input[type="range"]::-webkit-slider-thumb:hover {
   font-variant-numeric: tabular-nums;
 }
 
-/* Navbar Refresh Button */
-.btn-refresh {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  background: rgba(255, 255, 255, 0.06);
-  border: 1px solid rgba(255, 255, 255, 0.14);
-  color: var(--text-primary);
-  font-family: var(--font-system);
-  font-size: 0.8rem;
-  font-weight: 600;
-  padding: 6px 14px;
-  border-radius: var(--radius-full);
-  cursor: pointer;
-  backdrop-filter: var(--glass-filter);
-  -webkit-backdrop-filter: var(--glass-filter);
-  transition: var(--transition-smooth);
-}
 
-.btn-refresh:hover {
-  background: rgba(255, 255, 255, 0.12);
-  border-color: rgba(255, 255, 255, 0.25);
-  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.3);
-  transform: translateY(-1px);
-}
-
-.btn-refresh:active {
-  transform: translateY(0);
-}
-
-.btn-refresh.loading {
-  opacity: 0.75;
-  cursor: not-allowed;
-}
-
-.btn-refresh.loading .refresh-icon {
-  animation: spin 1s infinite linear;
-}
-
-@keyframes spin {
-  from { transform: rotate(0deg); }
-  to { transform: rotate(360deg); }
-}
 
 .badge-tag.live-active {
   background: var(--emerald-bg) !important;

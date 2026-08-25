@@ -940,7 +940,7 @@ async function loadPortfolioROI() {
 
 // 7. FIX 4: Refresh Live Data Button Handler
 function setupRefreshButton() {
-  const btn = document.getElementById('btn-refresh-live');
+  const btn = document.getElementById('refresh-btn') || document.getElementById('btn-refresh-live');
   const btnText = document.getElementById('refresh-btn-text');
   if (!btn) return;
 
