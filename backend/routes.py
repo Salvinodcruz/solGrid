@@ -403,8 +403,7 @@ def ai_recommend():
         api_key = os.getenv('GROQ_API_KEY')
         client = Groq(api_key=api_key)
 
-        prompt = f"""You are SolGrid AI, an expert solar 
-thermal engineer. Analyze this utility-scale solar farm:
+        prompt = f"""Analyze this utility-scale solar farm:
 
 Farm: {building_label}
 Capacity: {mw:.0f} MW
@@ -414,16 +413,25 @@ Monthly revenue loss: ${monthly_loss:,.0f}
 Annual revenue loss: ${annual_loss:,.0f}
 Risk score: {risk_score:.0f}/100
 
-Give a sharp, technical analysis with:
-1. ROOT CAUSE: Why is this farm losing so much?
-2. QUICK WIN (under $500k, implement in 30 days)
-3. BEST ROI INVESTMENT (12-24 month payback)
-4. LONG TERM STRATEGY (3-5 year capital plan)
-5. EXECUTIVE SUMMARY (one sentence for the asset owner)
+Output exactly 3 sections:
+1. ROOT CAUSE
+2. QUICK WIN (<= $500k, <= 30 days)
+3. STRATEGIC CAPEX PLAN
 
-Format your response with clear, short bullet points, clean section titles, and no dense walls of text.
-Be specific with numbers and dollar figures.
-Keep total response under 400 words."""
+Keep total response under 180 words. Bullet points and bold numbers only. No tables or conversational preamble."""
+
+        system_prompt = (
+            "You are SolGrid AI, an executive solar thermal engineer.\n"
+            "STRICT OUTPUT RULES:\n"
+            "- Maximum 180 words TOTAL.\n"
+            "- DO NOT use markdown tables (no '|' pipes).\n"
+            "- DO NOT write long introductory sentences or conversational preamble.\n"
+            "- Output exactly 3 bulleted sections with maximum 2-3 short bullet points each:\n"
+            "  1. ROOT CAUSE\n"
+            "  2. QUICK WIN (<= $500k, <= 30 days)\n"
+            "  3. STRATEGIC CAPEX PLAN\n"
+            "- Use bold numbers for key metrics ($/yr, °C, % loss)."
+        )
 
         models_to_try = ["llama-3.1-8b-instant", "openai/gpt-oss-120b", "openai/gpt-oss-20b", "qwen/qwen3.6-27b"]
         response = None
@@ -435,14 +443,11 @@ Keep total response under 400 words."""
                     messages=[
                         {
                             "role": "system",
-                            "content": "You are SolGrid AI, an expert "
-                                       "solar thermal engineer and "
-                                       "financial analyst. Be concise, "
-                                       "technical, and ROI-focused."
+                            "content": system_prompt
                         },
                         {"role": "user", "content": prompt}
                     ],
-                    max_tokens=500,
+                    max_tokens=2048,
                     temperature=0.3
                 )
                 used_model = m

@@ -977,9 +977,35 @@ function setupRefreshButton() {
   });
 }
 
+// Auto-clean trailing truncated sentences/symbols
+function sanitizeAiOutput(rawText) {
+  if (!rawText) return "";
+  
+  let cleaned = rawText.trim();
+  
+  // Remove dangling trailing symbols like **, *, or -
+  cleaned = cleaned.replace(/[\*\-\_]+$/, '');
+  
+  // If the string doesn't end with a period, exclamation, or closing bracket,
+  // trim back to the last complete sentence/bullet point
+  if (!/[.!?\)]$/.test(cleaned)) {
+    const lastPunct = Math.max(
+      cleaned.lastIndexOf('.'),
+      cleaned.lastIndexOf('!'),
+      cleaned.lastIndexOf('?')
+    );
+    if (lastPunct > 0) {
+      cleaned = cleaned.substring(0, lastPunct + 1);
+    }
+  }
+  
+  return cleaned;
+}
+
 // Markdown parser with marked.js integration, clean fallback, and asterisks replacement
 function renderMarkdownToHtml(markdown) {
   if (!markdown) return '';
+  let cleanMarkdown = sanitizeAiOutput(String(markdown));
   let html = '';
   
   if (typeof marked !== 'undefined' && typeof marked.parse === 'function') {
@@ -990,7 +1016,7 @@ function renderMarkdownToHtml(markdown) {
           breaks: true
         });
       }
-      html = marked.parse(markdown);
+      html = marked.parse(cleanMarkdown);
     } catch (err) {
       console.warn('Marked parse error, falling back to regex parser:', err);
       html = '';
@@ -999,7 +1025,7 @@ function renderMarkdownToHtml(markdown) {
 
   // Fallback regex parser if marked.js is unavailable
   if (!html) {
-    let text = String(markdown)
+    let text = cleanMarkdown
       .replace(/&/g, '&amp;')
       .replace(/</g, '&lt;')
       .replace(/>/g, '&gt;');
@@ -1018,6 +1044,21 @@ function renderMarkdownToHtml(markdown) {
     // Dividers: --- -> <hr>
     text = text.replace(/^(?:---|\*\*\*|___)\s*$/gim, '<hr>');
 
+    // Tables: | col1 | col2 |
+    text = text.replace(/((?:^\|.*\|\r?\n?)+)/gm, (match) => {
+      const rows = match.trim().split('\n').filter(r => r.trim().startsWith('|'));
+      if (rows.length < 2) return match;
+      let htmlTable = '<table>';
+      rows.forEach((row, idx) => {
+        if (row.includes('---')) return;
+        const cells = row.split('|').filter((_, i, arr) => i > 0 && i < arr.length - 1);
+        const tag = idx === 0 ? 'th' : 'td';
+        htmlTable += '<tr>' + cells.map(c => `<${tag}>${c.trim()}</${tag}>`).join('') + '</tr>';
+      });
+      htmlTable += '</table>';
+      return htmlTable;
+    });
+
     // Bullet lists
     text = text.replace(/^\s*[-*]\s+(.*$)/gim, '<li>$1</li>');
     text = text.replace(/(<li>.*<\/li>)/gms, '<ul>$1</ul>');
@@ -1028,7 +1069,7 @@ function renderMarkdownToHtml(markdown) {
     // Paragraph splits
     text = text.split(/\n\n+/).map(p => {
       p = p.trim();
-      if (p.startsWith('<h1>') || p.startsWith('<h2>') || p.startsWith('<h3>') || p.startsWith('<ul>') || p.startsWith('<hr>') || p.startsWith('<p>')) {
+      if (p.startsWith('<h1>') || p.startsWith('<h2>') || p.startsWith('<h3>') || p.startsWith('<ul>') || p.startsWith('<table>') || p.startsWith('<hr>') || p.startsWith('<p>')) {
         return p;
       }
       return `<p>${p.replace(/\n/g, '<br>')}</p>`;
@@ -1039,6 +1080,7 @@ function renderMarkdownToHtml(markdown) {
 
   // Post-processing: Ensure all raw asterisks **bold** are cleanly transformed to <strong>
   html = html.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+  html = html.replace(/\*\*+$/, '').replace(/\*\*/g, '');
 
   return html;
 }
@@ -1077,9 +1119,10 @@ async function getAIRecommendation() {
     );
 
     const data = await res.json();
+    const formattedText = sanitizeAiOutput(data.recommendation || '');
     const aiOutputContainer = document.getElementById('ai-output') || document.getElementById('ai-text');
     if (aiOutputContainer) {
-      aiOutputContainer.innerHTML = renderMarkdownToHtml(data.recommendation || '');
+      aiOutputContainer.innerHTML = renderMarkdownToHtml(formattedText);
     }
     if (loading) loading.style.display = 'none';
     if (response) response.style.display = 'block';
