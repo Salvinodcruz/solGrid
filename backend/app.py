@@ -24,6 +24,8 @@ def create_app():
     )
     CORS(app, origins="*")
 
+    app.register_blueprint(bp)
+
     @app.route('/')
     def serve_index():
         return send_from_directory(
@@ -56,7 +58,6 @@ def create_app():
             app.static_folder, 'index.html'
         )
 
-    app.register_blueprint(bp)
     return app
 
 
