@@ -1,5 +1,6 @@
 """Flask app entrypoint for SolGrid Thermal Sync."""
 
+import os
 import sys
 from pathlib import Path
 
@@ -13,7 +14,7 @@ from backend.routes import bp
 
 def create_app():
     app = Flask(__name__)
-    CORS(app)
+    CORS(app, origins="*")
     app.register_blueprint(bp)
     return app
 
@@ -21,5 +22,7 @@ def create_app():
 app = create_app()
 
 
-if __name__ == "__main__":
-    app.run(host="127.0.0.1", port=5000, debug=True, use_reloader=False)
+if __name__ == '__main__':
+    port = int(os.environ.get('PORT', 5000))
+    app.run(host='0.0.0.0', port=port, debug=False)
+
