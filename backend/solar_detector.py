@@ -711,17 +711,14 @@ def _color_fallback(result, img, lat, lng, zoom):
     gray = (r + g + b) / 3
     
     panel_mask = (
-        # Uniform gray (low variance between channels)
-        (np.abs(r - g) < 25) &
-        (np.abs(g - b) < 25) &
-        (np.abs(r - b) < 30) &
-        # Slight blue emphasis (panels)
-        (b >= r - 5) &
-        # Medium brightness (not too bright, not dark)
-        (gray > 60) &
-        (gray < 160) &
-        # Not pure white (roads/buildings)
-        (gray < 200)
+        # Dark panels - all channels low
+        (r < 80) & (g < 80) & (b < 90) &
+        # Slight blue tint (panels vs pure shadow)
+        (b > r - 10) &
+        # Not pure black (actual shadows)
+        (gray > 20) &
+        # Uniform darkness (not speckled terrain)
+        (np.abs(r - g) < 20)
     )
     
     h, w = img_array.shape[:2]
@@ -740,7 +737,7 @@ def _color_fallback(result, img, lat, lng, zoom):
             ]
             coverage = cell.mean()
             
-            if coverage > 0.30:
+            if coverage > 0.15:
                 cx = (col + 0.5) * cell_w
                 cy = (row + 0.5) * cell_h
                 hw = cell_w * 0.48
@@ -798,7 +795,7 @@ def _color_fallback(result, img, lat, lng, zoom):
             for row in range(grid_size):
                 for col in range(grid_size):
                     cell = panel_mask[row*cell_h:(row+1)*cell_h, col*cell_w:(col+1)*cell_w]
-                    if cell.mean() > 0.30:
+                    if cell.mean() > 0.15:
                         cv2.rectangle(
                             vis_img,
                             (int(col*cell_w), int(row*cell_h)),
