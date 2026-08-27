@@ -13,7 +13,14 @@ import os
 import urllib.request
 from io import BytesIO
 
-import cv2
+try:
+    import cv2
+    CV2_AVAILABLE = True
+except Exception as _cv_err:
+    cv2 = None
+    CV2_AVAILABLE = False
+    print(f"[SolarDetector] cv2 import warning: {_cv_err}")
+
 import numpy as np
 import requests
 from PIL import Image
@@ -380,10 +387,14 @@ def run_sliding_window_segmentation(img, model, tile_size=640, overlap=0.20, con
                     if r.masks is not None and r.masks.data is not None:
                         masks_data = r.masks.data.cpu().numpy()
                         for m in masks_data:
-                            m_resized = cv2.resize(
-                                m, (cur_w, cur_h),
-                                interpolation=cv2.INTER_LINEAR
-                            )
+                            if cv2 is not None:
+                                m_resized = cv2.resize(
+                                    m, (cur_w, cur_h),
+                                    interpolation=cv2.INTER_LINEAR
+                                )
+                            else:
+                                m_pil = Image.fromarray((m * 255).astype(np.uint8))
+                                m_resized = np.array(m_pil.resize((cur_w, cur_h), Image.Resampling.BILINEAR)) / 255.0
                             bin_m = (m_resized > 0.5).astype(np.uint8) * 255
                             full_binary_mask[y0:y0 + cur_h, x0:x0 + cur_w] = np.bitwise_or(
                                 full_binary_mask[y0:y0 + cur_h, x0:x0 + cur_w],
@@ -407,6 +418,10 @@ def extract_geojson_features_from_mask(
     convert arbitrary polygon contours into geographic coordinates using direct Web Mercator
     corner tile extents, and calculate precise surface area in m^2.
     """
+    if cv2 is None:
+        print("[SolarDetector] cv2 is not available for contour extraction")
+        return [], 0.0
+
     contours, _ = cv2.findContours(
         binary_mask,
         cv2.RETR_EXTERNAL,
@@ -650,8 +665,9 @@ def _color_fallback(result, composite_img, metadata):
     )
 
     binary_mask = (panel_mask.astype(np.uint8)) * 255
-    kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (3, 3))
-    binary_mask = cv2.morphologyEx(binary_mask, cv2.MORPH_CLOSE, kernel)
+    if cv2 is not None:
+        kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (3, 3))
+        binary_mask = cv2.morphologyEx(binary_mask, cv2.MORPH_CLOSE, kernel)
 
     h, w = img_array.shape[:2]
     features, total_area = extract_geojson_features_from_mask(
@@ -668,7 +684,7 @@ def _color_fallback(result, composite_img, metadata):
             os.path.dirname(__file__),
             '..', 'data', 'yolo_annotated.jpg'
         )
-        if not os.path.exists(debug_path):
+        if not os.path.exists(debug_path) and cv2 is not None:
             contours, _ = cv2.findContours(binary_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
             vis_img = np.array(composite_img).copy()
             cv2.drawContours(vis_img, contours, -1, (0, 255, 0), 2)

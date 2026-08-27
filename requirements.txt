@@ -10,14 +10,8 @@ flask-cors
 jupyter
 joblib
 python-dotenv
-ultralytics>=8.0.0
-
-gunicorn
-
-groq>=0.4.0
-
-ultralytics>=8.0.0
-
 opencv-python-headless>=4.8.0
-
+ultralytics>=8.0.0
+gunicorn
+groq>=0.4.0
 pillow>=10.0.0
