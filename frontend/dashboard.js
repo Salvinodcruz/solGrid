@@ -1409,11 +1409,7 @@ async function detectAndRenderPanels(building, autoSwitchSatellite = false) {
         'Content-Type': 'application/json'
       },
       body: JSON.stringify({ 
-        lat, 
-        lng, 
-        zoom: zoomLevel || 16,
-        bbox,
-        grid_size: 2
+        lat, lng, zoom: 13
       })
     });
 
@@ -1476,7 +1472,7 @@ async function detectAndRenderPanels(building, autoSwitchSatellite = false) {
 
     map.flyTo({
       center: [lng, lat],
-      zoom: 14,
+      zoom: 12,
       duration: 2000
     });
 

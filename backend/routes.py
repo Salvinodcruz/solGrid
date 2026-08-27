@@ -632,7 +632,20 @@ def detect_panels_endpoint():
             bbox = None
 
         zoom = int(zoom)
-        mapbox_token = os.getenv('MAPBOX_TOKEN', '')
+        import sys
+        sys.path.insert(0, os.path.dirname(
+            os.path.dirname(__file__)
+        ))
+        
+        try:
+            import config
+            mapbox_token = getattr(config, 'MAPBOX_TOKEN', '') or \
+                           os.getenv('MAPBOX_TOKEN', '')
+        except:
+            mapbox_token = os.getenv('MAPBOX_TOKEN', '')
+        
+        print(f"[Route] Mapbox token present: {bool(mapbox_token)}")
+        print(f"[Route] Token prefix: {mapbox_token[:8] if mapbox_token else 'NONE'}")
 
         from backend.solar_detector import detect_solar_panels
         result = detect_solar_panels(
@@ -665,6 +678,41 @@ def detect_panels_endpoint():
 def satellite_detect():
     """Legacy endpoint wrapper for backward compatibility."""
     return detect_panels_endpoint()
+
+
+@bp.route('/test-satellite', methods=['GET'])
+def test_satellite():
+    try:
+        import config
+        token = getattr(config, 'MAPBOX_TOKEN', '')
+        
+        lat = 32.9667
+        lng = -113.5000
+        zoom = 13
+        
+        url = (
+            f"https://api.mapbox.com/styles/v1/mapbox/"
+            f"satellite-v9/static/"
+            f"{lng},{lat},{zoom},0/"
+            f"640x640"
+            f"?access_token={token}"
+        )
+        
+        import requests as req
+        r = req.get(url, timeout=15)
+        
+        return jsonify({
+            'status_code': r.status_code,
+            'content_type': r.headers.get(
+                'content-type', 'unknown'
+            ),
+            'content_length': len(r.content),
+            'token_present': bool(token),
+            'token_prefix': token[:12] if token else 'NONE',
+            'url_sample': url[:100]
+        })
+    except Exception as e:
+        return jsonify({'error': str(e)})
 
 
 

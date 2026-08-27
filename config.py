@@ -30,6 +30,7 @@ STC_TEMP = 25             # standard test condition temp (C)
 FORTYGUARD_API_KEY = os.getenv("FORTYGUARD_API_KEY")
 NREL_API_KEY = os.getenv("NREL_API_KEY")
 GROQ_API_KEY = os.getenv("GROQ_API_KEY")
+MAPBOX_TOKEN = os.getenv("MAPBOX_TOKEN", "")
 
 # API endpoints
 FORTYGUARD_URL = "https://api.fortyguard.com/v1/environmental-parameters"

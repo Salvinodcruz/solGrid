@@ -90,12 +90,56 @@ def get_meters_per_pixel(lat: float, zoom: int) -> float:
     return 156543.03392 * math.cos(math.radians(lat)) / (2.0 ** zoom)
 
 
+def fetch_satellite_image(lat, lng, zoom, mapbox_token):
+    """Fetch satellite image from Mapbox Static API."""
+    
+    if not mapbox_token or mapbox_token == 'your_mapbox_token_here':
+        raise ValueError("No valid Mapbox token provided")
+    
+    url = (
+        f"https://api.mapbox.com/styles/v1/mapbox/"
+        f"satellite-v9/static/"
+        f"{lng},{lat},{zoom},0/"
+        f"640x640@2x"
+        f"?access_token={mapbox_token}"
+    )
+    
+    print(f"[SolarDetector] Fetching satellite image:")
+    print(f"  lat={lat}, lng={lng}, zoom={zoom}")
+    print(f"  URL: {url[:80]}...")
+    
+    headers = {
+        'User-Agent': 'SolGrid-ThermalSync/1.0'
+    }
+    
+    response = requests.get(url, timeout=20, headers=headers)
+    
+    print(f"[SolarDetector] Response status: {response.status_code}")
+    print(f"[SolarDetector] Content-Type: {response.headers.get('content-type', 'unknown')}")
+    
+    if response.status_code == 401:
+        raise ValueError("Invalid Mapbox token")
+    if response.status_code == 404:
+        raise ValueError(f"Mapbox API 404 — check URL format. URL: {url[:100]}")
+    
+    response.raise_for_status()
+    
+    content_type = response.headers.get('content-type', '')
+    if 'image' not in content_type:
+        raise ValueError(f"Expected image, got: {content_type}")
+    
+    img = Image.open(BytesIO(response.content)).convert('RGB')
+    print(f"[SolarDetector] Image loaded: {img.size}")
+    return img
+
+
 def fetch_satellite_tile(lat, lng, zoom, mapbox_token, width=640, height=640, retina=True):
     """Fetch a single high-resolution static tile from Mapbox Static Images API."""
     scale_str = "@2x" if retina else ""
     url = (
         f"https://api.mapbox.com/styles/v1/mapbox/"
-        f"satellite-v9/static/{lng},{lat},{zoom}/"
+        f"satellite-v9/static/"
+        f"{lng},{lat},{zoom},0/"
         f"{width}x{height}{scale_str}?access_token={mapbox_token}"
     )
     try:
@@ -110,7 +154,8 @@ def fetch_satellite_tile(lat, lng, zoom, mapbox_token, width=640, height=640, re
         try:
             url_std = (
                 f"https://api.mapbox.com/styles/v1/mapbox/"
-                f"satellite-v9/static/{lng},{lat},{zoom}/"
+                f"satellite-v9/static/"
+                f"{lng},{lat},{zoom},0/"
                 f"{width}x{height}?access_token={mapbox_token}"
             )
             response = requests.get(url_std, timeout=15)
@@ -414,10 +459,10 @@ def extract_geojson_features_from_mask(
 def detect_solar_panels(
     lat,
     lng,
-    zoom=17,
+    zoom=13,
     mapbox_token="",
     bbox=None,
-    grid_size=2,
+    grid_size=1,
     tile_size=640,
     retina=True
 ):
@@ -425,6 +470,10 @@ def detect_solar_panels(
     Main detection pipeline with corner-tile extent geographic calculation & sliding window segmentation.
     Returns panel polygons, count, total area, image base64, and GeoJSON features.
     """
+    lat = float(lat)
+    lng = float(lng)
+    zoom = int(zoom)
+
     result = {
         "panel_count": 0,
         "total_surface_area_m2": 0,
@@ -433,30 +482,72 @@ def detect_solar_panels(
         "image_b64": None,
         "zoom": zoom,
         "center": [lng, lat],
-        "grid_size": grid_size,
-        "composite_size": [grid_size * tile_size * 2, grid_size * tile_size * 2],
     }
 
-    # Fetch and stitch high-resolution satellite grid using corner tile extents
-    composite_img, metadata = fetch_and_stitch_satellite_grid(
-        lat=lat,
-        lng=lng,
-        zoom=zoom,
-        mapbox_token=mapbox_token,
-        bbox=bbox,
-        grid_size=grid_size,
-        tile_size=tile_size,
-        retina=retina
-    )
+    img = None
+    if mapbox_token:
+        try:
+            img = fetch_satellite_image(lat, lng, zoom, mapbox_token)
+        except Exception as e:
+            print(f"[SolarDetector] Satellite fetch failed: {e}")
 
+    # Fallback to local sample image if fetch failed or no token
+    if img is None:
+        sample_path = os.path.join(
+            os.path.dirname(os.path.dirname(__file__)),
+            "data",
+            "sample_satellite.jpg"
+        )
+        if os.path.exists(sample_path):
+            try:
+                img = Image.open(sample_path).convert("RGB")
+            except Exception:
+                pass
+    if img is None:
+        img = Image.new("RGB", (1280, 1280), color=(35, 45, 55))
+
+    w, h = img.size
+    result["composite_size"] = [w, h]
+
+    # Calculate Mercator extent for 640x640 viewport at given zoom
+    x_center, y_center = latlng_to_world_mercator(lng, lat, zoom)
+    half_span = 320.0  # 640 CSS px / 2
+    x_min = x_center - half_span
+    x_max = x_center + half_span
+    y_min = y_center - half_span
+    y_max = y_center + half_span
+
+    geo_min_lng, geo_max_lat = world_mercator_to_latlng(x_min, y_min, zoom)
+    geo_max_lng, geo_min_lat = world_mercator_to_latlng(x_max, y_max, zoom)
+
+    corner_extents = {
+        "x_min": x_min,
+        "y_min": y_min,
+        "x_max": x_max,
+        "y_max": y_max,
+        "zoom": zoom,
+        "bounds": [
+            round(geo_min_lng, 8),
+            round(geo_min_lat, 8),
+            round(geo_max_lng, 8),
+            round(geo_max_lat, 8),
+        ],
+    }
+
+    metadata = {
+        "center_lat": lat,
+        "center_lng": lng,
+        "zoom": zoom,
+        "composite_size": [w, h],
+        "corner_extents": corner_extents,
+        "bounds": corner_extents["bounds"],
+    }
     result["metadata"] = metadata
-    result["center"] = [metadata["center_lng"], metadata["center_lat"]]
-    result["composite_size"] = metadata["composite_size"]
-    result["bounds"] = metadata["bounds"]
+    result["bounds"] = corner_extents["bounds"]
 
     try:
         buffered = BytesIO()
-        composite_img.save(buffered, format="JPEG", quality=85)
+        img.save(buffered, format="JPEG", quality=85)
         result["image_b64"] = base64.b64encode(buffered.getvalue()).decode()
     except Exception:
         pass
@@ -465,19 +556,18 @@ def detect_solar_panels(
 
     if MODEL_LOADED and solar_model is not None:
         try:
-            w, h = composite_img.size
             full_mask = run_sliding_window_segmentation(
-                img=composite_img,
+                img=img,
                 model=solar_model,
                 tile_size=640,
                 overlap=0.20,
-                conf=0.20,
+                conf=0.15,
                 imgsz=1024
             )
 
             features, total_area = extract_geojson_features_from_mask(
                 binary_mask=full_mask,
-                corner_extents=metadata["corner_extents"],
+                corner_extents=corner_extents,
                 img_w=w,
                 img_h=h,
                 min_area_px=15
@@ -489,17 +579,17 @@ def detect_solar_panels(
                 result["geojson_features"] = features
                 result["model_used"] = "finloop-yolov8s-seg"
                 print(
-                    f"Corner-extent grid {grid_size}x{grid_size} composite ({w}x{h}px) detection: "
-                    f"{len(features)} panel arrays, {total_area:.1f}m² surface area."
+                    f"[SolarDetector] Detection succeeded: {len(features)} panel arrays, "
+                    f"{total_area:.1f}m² surface area."
                 )
             else:
-                result = _color_fallback(result, composite_img, metadata)
+                result = _color_fallback(result, img, metadata)
 
         except Exception as e:
-            print(f"YOLO sliding-window grid inference failed: {e}")
-            result = _color_fallback(result, composite_img, metadata)
+            print(f"YOLO inference failed: {e}")
+            result = _color_fallback(result, img, metadata)
     else:
-        result = _color_fallback(result, composite_img, metadata)
+        result = _color_fallback(result, img, metadata)
 
     return result
 
