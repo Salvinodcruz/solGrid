@@ -50,14 +50,22 @@ def load_model():
         exist_ok=True
     )
     
+    try:
+        from ultralytics import YOLO
+    except Exception as e:
+        print(f"[SolarDetector] ultralytics import failed: {e}")
+        return None, False
+
     if os.path.exists(model_path):
         print(f"Loading model from {model_path}")
-        from ultralytics import YOLO
-        return YOLO(model_path), True
+        try:
+            return YOLO(model_path), True
+        except Exception as e:
+            print(f"Failed to load model weights: {e}")
+            return None, False
     
     try:
         print("Downloading solar panel model...")
-        from ultralytics import YOLO
         try:
             model = YOLO(
                 'keremberke/yolov8s-solar-panel-segmentation'

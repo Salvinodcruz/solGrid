@@ -13,10 +13,18 @@ import os
 import sys
 from io import BytesIO
 
-import cv2
+try:
+    import cv2
+except Exception:
+    cv2 = None
+
 import numpy as np
 from PIL import Image
-from ultralytics import YOLO
+
+try:
+    from ultralytics import YOLO
+except Exception:
+    YOLO = None
 
 
 def latlng_to_world_mercator(lng: float, lat: float, zoom: int):
