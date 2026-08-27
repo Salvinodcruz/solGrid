@@ -1,7 +1,7 @@
-// Load Mapbox token securely from window.CONFIG
-mapboxgl.accessToken = window.CONFIG?.MAPBOX_TOKEN || '';
+// Load Mapbox token securely from window.CONFIG or global MAPBOX_TOKEN
+mapboxgl.accessToken = (window.CONFIG && window.CONFIG.MAPBOX_TOKEN) || (typeof MAPBOX_TOKEN !== 'undefined' ? MAPBOX_TOKEN : '');
 
-const API_BASE = 'http://localhost:5000';
+const API_BASE = 'https://solgrid-production.up.railway.app';
 
 // 5 Verified real utility-scale solar farms in Arizona with FortyGuard Satellite Panel Segmentation
 const BUILDINGS = [
@@ -222,7 +222,7 @@ function formatMoney(n) {
 
 // 1. Initialize Mapbox Map
 function initMap() {
-  const token = window.CONFIG?.MAPBOX_TOKEN || '';
+  const token = (window.CONFIG && window.CONFIG.MAPBOX_TOKEN) || (typeof MAPBOX_TOKEN !== 'undefined' ? MAPBOX_TOKEN : '');
   const isPlaceholder = !token || token.includes('YOUR_MAPBOX_TOKEN_HERE');
 
   mapboxgl.accessToken = token;
