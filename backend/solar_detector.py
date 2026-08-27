@@ -20,49 +20,63 @@ from PIL import Image
 
 MODEL_DIR = os.path.join(os.path.dirname(__file__), "models")
 MODEL_PATH = os.path.join(MODEL_DIR, "solar_panels.pt")
-HF_WEIGHTS_URL = "https://huggingface.co/finloop/yolov8s-seg-solar-panels/resolve/main/best.pt"
-
-solar_model = None
-MODEL_LOADED = False
 
 
-def _ensure_model_weights():
-    """Ensure fine-tuned solar segmentation weights are downloaded."""
-    global solar_model, MODEL_LOADED
-    if solar_model is not None:
-        return True
-
-    os.makedirs(MODEL_DIR, exist_ok=True)
-    if not os.path.exists(MODEL_PATH):
-        print("Downloading fine-tuned solar panel segmentation weights (finloop/yolov8s-seg)...")
-        try:
-            urllib.request.urlretrieve(HF_WEIGHTS_URL, MODEL_PATH)
-            print(f"Downloaded weights to {MODEL_PATH} ({os.path.getsize(MODEL_PATH)} bytes)")
-        except Exception as e:
-            print(f"Failed to download fine-tuned weights from HuggingFace: {e}")
-            fallback_local = os.path.join(os.path.dirname(os.path.dirname(__file__)), "yolov8n-seg.pt")
-            if os.path.exists(fallback_local):
-                import shutil
-                shutil.copyfile(fallback_local, MODEL_PATH)
-
+def get_mapbox_token():
+    """Retrieve Mapbox token from config or environment variable."""
     try:
+        import config
+        token = getattr(config, 'MAPBOX_TOKEN', '') or os.getenv('MAPBOX_TOKEN', '')
+    except Exception:
+        token = os.getenv('MAPBOX_TOKEN', '')
+    return token
+
+
+def load_model():
+    model_path = os.path.join(
+        os.path.dirname(__file__),
+        'models', 'solar_panels.pt'
+    )
+    
+    os.makedirs(
+        os.path.dirname(model_path), 
+        exist_ok=True
+    )
+    
+    if os.path.exists(model_path):
+        print(f"Loading model from {model_path}")
         from ultralytics import YOLO
-        if os.path.exists(MODEL_PATH):
-            solar_model = YOLO(MODEL_PATH)
-        else:
-            solar_model = YOLO("yolov8n-seg.pt")
-        MODEL_LOADED = True
-        print(f"YOLO solar segmentation model loaded successfully: {solar_model.names}")
-        return True
+        return YOLO(model_path), True
+    
+    try:
+        print("Downloading solar panel model...")
+        from ultralytics import YOLO
+        try:
+            model = YOLO(
+                'keremberke/yolov8s-solar-panel-segmentation'
+            )
+            model.save(model_path)
+            print("Model saved successfully")
+            return model, True
+        except Exception as e1:
+            print(f"YOLO keremberke download failed ({e1}), trying direct HF URL...")
+            import urllib.request
+            hf_url = "https://huggingface.co/finloop/yolov8s-seg-solar-panels/resolve/main/best.pt"
+            urllib.request.urlretrieve(hf_url, model_path)
+            print(f"Downloaded weights to {model_path}")
+            return YOLO(model_path), True
     except Exception as e:
-        solar_model = None
-        MODEL_LOADED = False
-        print(f"YOLO solar model loading failed: {e}")
-        return False
+        print(f"Model download failed: {e}")
+        print("Falling back to color detection")
+        return None, False
 
 
-# Attempt initial loading on import
-_ensure_model_weights()
+try:
+    solar_model, MODEL_LOADED = load_model()
+except Exception as e:
+    solar_model = None
+    MODEL_LOADED = False
+    print(f"Model init failed: {e}")
 
 
 def latlng_to_world_mercator(lng: float, lat: float, zoom: int):
@@ -90,8 +104,12 @@ def get_meters_per_pixel(lat: float, zoom: int) -> float:
     return 156543.03392 * math.cos(math.radians(lat)) / (2.0 ** zoom)
 
 
-def fetch_satellite_image(lat, lng, zoom, mapbox_token):
+def fetch_satellite_image(lat, lng=None, zoom=13, mapbox_token=None, lon=None):
     """Fetch satellite image from Mapbox Static API."""
+    if lng is None:
+        lng = lon
+    if mapbox_token is None:
+        mapbox_token = get_mapbox_token()
     
     if not mapbox_token or mapbox_token == 'your_mapbox_token_here':
         raise ValueError("No valid Mapbox token provided")
@@ -552,10 +570,31 @@ def detect_solar_panels(
     except Exception:
         pass
 
-    _ensure_model_weights()
+    global solar_model, MODEL_LOADED
+    if solar_model is None:
+        try:
+            solar_model, MODEL_LOADED = load_model()
+        except Exception:
+            pass
 
     if MODEL_LOADED and solar_model is not None:
         try:
+            # Run YOLO prediction and save annotated visualization
+            yolo_results = solar_model.predict(source=img, conf=0.15, verbose=False)
+            try:
+                annotated = yolo_results[0].plot()
+                from PIL import Image as PILImage
+                ann_img = PILImage.fromarray(annotated)
+                debug_path = os.path.join(
+                    os.path.dirname(__file__),
+                    '..', 'data', 'yolo_annotated.jpg'
+                )
+                os.makedirs(os.path.dirname(debug_path), exist_ok=True)
+                ann_img.save(debug_path)
+                print(f"Saved annotated image to {debug_path}")
+            except Exception as e:
+                print(f"Could not save annotated image: {e}")
+
             full_mask = run_sliding_window_segmentation(
                 img=img,
                 model=solar_model,
@@ -577,7 +616,7 @@ def detect_solar_panels(
                 result["panel_count"] = len(features)
                 result["total_surface_area_m2"] = total_area
                 result["geojson_features"] = features
-                result["model_used"] = "finloop-yolov8s-seg"
+                result["model_used"] = "yolov8s-solar-panel-segmentation"
                 print(
                     f"[SolarDetector] Detection succeeded: {len(features)} panel arrays, "
                     f"{total_area:.1f}m² surface area."
@@ -622,6 +661,22 @@ def _color_fallback(result, composite_img, metadata):
         img_h=h,
         min_area_px=25
     )
+
+    # If no yolo annotated image exists yet, save fallback visualization
+    try:
+        debug_path = os.path.join(
+            os.path.dirname(__file__),
+            '..', 'data', 'yolo_annotated.jpg'
+        )
+        if not os.path.exists(debug_path):
+            contours, _ = cv2.findContours(binary_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+            vis_img = np.array(composite_img).copy()
+            cv2.drawContours(vis_img, contours, -1, (0, 255, 0), 2)
+            os.makedirs(os.path.dirname(debug_path), exist_ok=True)
+            Image.fromarray(vis_img).save(debug_path)
+            print(f"Saved fallback annotated image to {debug_path}")
+    except Exception as e:
+        print(f"Fallback annotated save failed: {e}")
 
     result["panel_count"] = len(features)
     result["total_surface_area_m2"] = round(total_area, 1)

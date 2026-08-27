@@ -764,5 +764,72 @@ def test_satellite():
         return jsonify({'error': str(e)})
 
 
+@bp.route('/debug-satellite', methods=['GET'])
+def debug_satellite():
+    try:
+        import os, base64
+        from backend.solar_detector import (
+            fetch_satellite_image, get_mapbox_token
+        )
+        
+        lat = 32.9667
+        lon = -113.5000
+        zoom = 13
+        token = get_mapbox_token()
+        
+        img = fetch_satellite_image(
+            lat, lon, zoom, token
+        )
+        
+        from io import BytesIO
+        buf = BytesIO()
+        img.save(buf, format='JPEG', quality=85)
+        b64 = base64.b64encode(
+            buf.getvalue()
+        ).decode()
+        
+        return f'''
+        <html><body>
+        <h2>Satellite image fetched</h2>
+        <p>Size: {img.size}</p>
+        <p>Token: {token[:15]}...</p>
+        <img src="data:image/jpeg;base64,{b64}" 
+             style="max-width:640px">
+        </body></html>
+        '''
+    except Exception as e:
+        return f'<h2>Error: {e}</h2>'
+
+
+@bp.route('/debug-yolo', methods=['GET'])
+def debug_yolo():
+    try:
+        import base64
+        debug_path = os.path.join(
+            'data', 'yolo_annotated.jpg'
+        )
+        if not os.path.exists(debug_path):
+            alt_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'data', 'yolo_annotated.jpg')
+            if os.path.exists(alt_path):
+                debug_path = alt_path
+            else:
+                return '<h2>No YOLO result yet. Click a farm first.</h2>'
+        
+        with open(debug_path, 'rb') as f:
+            b64 = base64.b64encode(f.read()).decode()
+        
+        return f'''
+        <html><body>
+        <h2>YOLO Detection Result</h2>
+        <p>Green boxes = detected solar panels</p>
+        <img src="data:image/jpeg;base64,{b64}" 
+             style="max-width:640px">
+        </body></html>
+        '''
+    except Exception as e:
+        return f'<h2>Error: {e}</h2>'
+
+
+
 
 
