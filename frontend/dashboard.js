@@ -67,11 +67,11 @@ const BUILDINGS = [
     array_bounds: {
       type: "Polygon",
       coordinates: [[
-        [-112.9180, 33.3280],
-        [-112.8720, 33.3280],
-        [-112.8720, 33.3720],
-        [-112.9180, 33.3720],
-        [-112.9180, 33.3280]
+        [-112.9450, 33.3180],
+        [-112.8450, 33.3180],
+        [-112.8450, 33.3820],
+        [-112.9450, 33.3820],
+        [-112.9450, 33.3180]
       ]]
     },
     panel_area_m2: 1150000,
@@ -167,11 +167,11 @@ const FARM_BOUNDARIES = {
   'SF003': {
     name: 'Arlington Valley Solar Energy',
     polygon: [
-      [-112.9180, 33.3280],
-      [-112.8720, 33.3280],
-      [-112.8720, 33.3720],
-      [-112.9180, 33.3720],
-      [-112.9180, 33.3280]
+      [-112.9450, 33.3180],
+      [-112.8450, 33.3180],
+      [-112.8450, 33.3820],
+      [-112.9450, 33.3820],
+      [-112.9450, 33.3180]
     ]
   },
   'SF004': {
@@ -1422,7 +1422,7 @@ async function detectAndRenderPanels(building, autoSwitchSatellite = false) {
         'Content-Type': 'application/json'
       },
       body: JSON.stringify({ 
-        lat, lng, zoom: 13
+        lat, lng, zoom: 17
       })
     });
 

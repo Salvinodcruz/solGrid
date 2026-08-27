@@ -56,30 +56,30 @@ def load_model():
         print(f"[SolarDetector] ultralytics import failed: {e}")
         return None, False
 
-    if os.path.exists(model_path):
+    if os.path.exists(model_path) and os.path.getsize(model_path) > 1000000:
         print(f"Loading model from {model_path}")
         try:
-            return YOLO(model_path), True
+            m = YOLO(model_path)
+            print("YOLO solar model loaded")
+            return m, True
         except Exception as e:
             print(f"Failed to load model weights: {e}")
-            return None, False
     
     try:
         print("Downloading solar panel model...")
         try:
-            model = YOLO(
-                'keremberke/yolov8s-solar-panel-segmentation'
-            )
-            model.save(model_path)
-            print("Model saved successfully")
-            return model, True
-        except Exception as e1:
-            print(f"YOLO keremberke download failed ({e1}), trying direct HF URL...")
-            import urllib.request
             hf_url = "https://huggingface.co/finloop/yolov8s-seg-solar-panels/resolve/main/best.pt"
+            print(f"Downloading YOLO weights from {hf_url}...")
             urllib.request.urlretrieve(hf_url, model_path)
             print(f"Downloaded weights to {model_path}")
-            return YOLO(model_path), True
+            m = YOLO(model_path)
+            print("YOLO solar model loaded")
+            return m, True
+        except Exception as e1:
+            print(f"HF direct download failed ({e1}), trying keremberke/yolov8s-solar-panel-segmentation...")
+            model = YOLO('keremberke/yolov8s-solar-panel-segmentation')
+            print("YOLO solar model loaded")
+            return model, True
     except Exception as e:
         print(f"Model download failed: {e}")
         print("Falling back to color detection")
@@ -119,11 +119,56 @@ def get_meters_per_pixel(lat: float, zoom: int) -> float:
     return 156543.03392 * math.cos(math.radians(lat)) / (2.0 ** zoom)
 
 
-def fetch_satellite_image(lat, lng=None, zoom=13, mapbox_token=None, lon=None):
+def pixels_to_latlng(points, lat, lng, zoom, img_w=1280, img_h=1280):
+    """Convert pixel coordinates on the satellite image to [[lng, lat], ...] coordinates."""
+    if len(points) == 0:
+        return []
+    pts = np.array(points, dtype=np.float32)
+    max_x = float(np.max(pts[:, 0]))
+    max_y = float(np.max(pts[:, 1]))
+    if max_x <= 640 and max_y <= 640 and img_w == 1280:
+        span_w = 640.0
+        span_h = 640.0
+        scale_x = 1.0
+        scale_y = 1.0
+    else:
+        span_w = float(img_w)
+        span_h = float(img_h)
+        scale_x = 640.0 / span_w
+        scale_y = 640.0 / span_h
+
+    center_x, center_y = latlng_to_world_mercator(lng, lat, zoom)
+    coords = []
+    for p in pts:
+        px = float(p[0])
+        py = float(p[1])
+        world_x = center_x + (px - span_w / 2.0) * scale_x
+        world_y = center_y + (py - span_h / 2.0) * scale_y
+        p_lng, p_lat = world_mercator_to_latlng(world_x, world_y, zoom)
+        coords.append([round(p_lng, 6), round(p_lat, 6)])
+    return coords
+
+
+def calculate_area(points, zoom, lat, img_w=1280):
+    """Calculate geographic surface area in m^2 for a polygon given in image pixel coordinates."""
+    pts = np.array(points, dtype=np.float32)
+    if len(pts) < 3:
+        return 0.0
+    x = pts[:, 0]
+    y = pts[:, 1]
+    pixel_area = 0.5 * np.abs(np.dot(x, np.roll(y, 1)) - np.dot(y, np.roll(x, 1)))
+    m_per_css_px = 156543.03392 * math.cos(math.radians(lat)) / (2.0 ** zoom)
+    scale = 640.0 / float(img_w)
+    m_per_img_px = m_per_css_px * scale
+    area_m2 = pixel_area * (m_per_img_px ** 2)
+    return float(area_m2)
+
+
+def fetch_satellite_image(lat, lng=None, zoom=17, mapbox_token=None, lon=None):
     """Fetch satellite image from Mapbox Static API."""
     if lng is None:
         lng = lon
-    if mapbox_token is None:
+    if not mapbox_token:
         mapbox_token = get_mapbox_token()
     
     if not mapbox_token or mapbox_token == 'your_mapbox_token_here':
@@ -497,102 +542,59 @@ def extract_geojson_features_from_mask(
     return features, round(total_area_m2, 1)
 
 
-def detect_solar_panels(
-    lat,
-    lng,
-    zoom=13,
-    mapbox_token="",
-    bbox=None,
-    grid_size=1,
-    tile_size=640,
-    retina=True
-):
-    """
-    Main detection pipeline with corner-tile extent geographic calculation & sliding window segmentation.
-    Returns panel polygons, count, total area, image base64, and GeoJSON features.
-    """
-    lat = float(lat)
-    lng = float(lng)
-    zoom = int(zoom)
-
+def detect_solar_panels(lat, lng, zoom=17, mapbox_token='', **kwargs):
     result = {
-        "panel_count": 0,
-        "total_surface_area_m2": 0,
-        "geojson_features": [],
-        "model_used": "none",
-        "image_b64": None,
-        "zoom": zoom,
-        "center": [lng, lat],
+        'panel_count': 0,
+        'total_surface_area_m2': 0,
+        'geojson_features': [],
+        'model_used': 'none',
+        'image_b64': None,
+        'zoom': zoom,
+        'center': [lng, lat]
     }
-
+    
+    zoom_levels = [17, 16, 15]
     img = None
-    if mapbox_token:
+    used_zoom = zoom
+    
+    for z in zoom_levels:
         try:
-            img = fetch_satellite_image(lat, lng, zoom, mapbox_token)
+            img = fetch_satellite_image(
+                lat, lng, z, mapbox_token
+            )
+            used_zoom = z
+            print(f"Image fetched at zoom {z}")
+            break
         except Exception as e:
-            print(f"[SolarDetector] Satellite fetch failed: {e}")
-
-    # Fallback to local sample image if fetch failed or no token
+            print(f"Zoom {z} failed: {e}")
+            continue
+    
     if img is None:
-        sample_path = os.path.join(
-            os.path.dirname(os.path.dirname(__file__)),
-            "data",
-            "sample_satellite.jpg"
-        )
-        if os.path.exists(sample_path):
-            try:
-                img = Image.open(sample_path).convert("RGB")
-            except Exception:
-                pass
-    if img is None:
-        img = Image.new("RGB", (1280, 1280), color=(35, 45, 55))
-
-    w, h = img.size
-    result["composite_size"] = [w, h]
-
-    # Calculate Mercator extent for 640x640 viewport at given zoom
-    x_center, y_center = latlng_to_world_mercator(lng, lat, zoom)
-    half_span = 320.0  # 640 CSS px / 2
-    x_min = x_center - half_span
-    x_max = x_center + half_span
-    y_min = y_center - half_span
-    y_max = y_center + half_span
-
-    geo_min_lng, geo_max_lat = world_mercator_to_latlng(x_min, y_min, zoom)
-    geo_max_lng, geo_min_lat = world_mercator_to_latlng(x_max, y_max, zoom)
-
-    corner_extents = {
-        "x_min": x_min,
-        "y_min": y_min,
-        "x_max": x_max,
-        "y_max": y_max,
-        "zoom": zoom,
-        "bounds": [
-            round(geo_min_lng, 8),
-            round(geo_min_lat, 8),
-            round(geo_max_lng, 8),
-            round(geo_max_lat, 8),
-        ],
-    }
-
-    metadata = {
-        "center_lat": lat,
-        "center_lng": lng,
-        "zoom": zoom,
-        "composite_size": [w, h],
-        "corner_extents": corner_extents,
-        "bounds": corner_extents["bounds"],
-    }
-    result["metadata"] = metadata
-    result["bounds"] = corner_extents["bounds"]
-
+        print("All zoom levels failed")
+        return result
+    
+    from io import BytesIO
+    import base64
+    buf = BytesIO()
+    img.save(buf, format='JPEG', quality=85)
+    result['image_b64'] = base64.b64encode(
+        buf.getvalue()
+    ).decode()
+    result['zoom'] = used_zoom
+    
+    # Save debug image
     try:
-        buffered = BytesIO()
-        img.save(buffered, format="JPEG", quality=85)
-        result["image_b64"] = base64.b64encode(buffered.getvalue()).decode()
+        debug_path = os.path.join(
+            os.path.dirname(__file__),
+            '..', 'data', 
+            f'satellite_{lat}_{lng}.jpg'
+        )
+        os.makedirs(os.path.dirname(debug_path), exist_ok=True)
+        img.save(debug_path)
+        print(f"Saved satellite to {debug_path}")
     except Exception:
         pass
-
+    
     global solar_model, MODEL_LOADED
     if solar_model is None:
         try:
@@ -602,12 +604,19 @@ def detect_solar_panels(
 
     if MODEL_LOADED and solar_model is not None:
         try:
-            # Run YOLO prediction and save annotated visualization
-            yolo_results = solar_model.predict(source=img, conf=0.15, verbose=False)
+            results = solar_model.predict(
+                source=img,
+                conf=0.10,
+                iou=0.35,
+                imgsz=640,
+                verbose=True,
+                agnostic_nms=True
+            )
+            
+            # Save YOLO annotated image for /debug-yolo
             try:
-                annotated = yolo_results[0].plot()
-                from PIL import Image as PILImage
-                ann_img = PILImage.fromarray(annotated)
+                annotated = results[0].plot()
+                ann_img = Image.fromarray(annotated)
                 debug_path = os.path.join(
                     os.path.dirname(__file__),
                     '..', 'data', 'yolo_annotated.jpg'
@@ -618,92 +627,187 @@ def detect_solar_panels(
             except Exception as e:
                 print(f"Could not save annotated image: {e}")
 
-            full_mask = run_sliding_window_segmentation(
-                img=img,
-                model=solar_model,
-                tile_size=640,
-                overlap=0.20,
-                conf=0.15,
-                imgsz=1024
-            )
-
-            features, total_area = extract_geojson_features_from_mask(
-                binary_mask=full_mask,
-                corner_extents=corner_extents,
-                img_w=w,
-                img_h=h,
-                min_area_px=15
-            )
-
-            if len(features) > 0:
-                result["panel_count"] = len(features)
-                result["total_surface_area_m2"] = total_area
-                result["geojson_features"] = features
-                result["model_used"] = "yolov8s-solar-panel-segmentation"
-                print(
-                    f"[SolarDetector] Detection succeeded: {len(features)} panel arrays, "
-                    f"{total_area:.1f}m² surface area."
+            features = []
+            total_area = 0
+            
+            for r in results:
+                if r.masks is not None:
+                    for idx, mask in enumerate(r.masks.xy):
+                        if len(mask) < 3:
+                            continue
+                        
+                        coords = pixels_to_latlng(
+                            mask, lat, lng, used_zoom,
+                            img_w=img.width, img_h=img.height
+                        )
+                        if len(coords) < 4:
+                            continue
+                        
+                        area = calculate_area(
+                            mask, used_zoom, lat,
+                            img_w=img.width
+                        )
+                        total_area += area
+                        
+                        conf = 0.5
+                        if r.boxes is not None and idx < len(r.boxes.conf):
+                            conf = float(r.boxes.conf[idx])
+                        
+                        features.append({
+                            'type': 'Feature',
+                            'geometry': {
+                                'type': 'Polygon',
+                                'coordinates': [coords]
+                            },
+                            'properties': {
+                                'type': 'solar_panel_array',
+                                'area_m2': round(area, 1),
+                                'confidence': conf
+                            }
+                        })
+            
+            if features:
+                result['panel_count'] = len(features)
+                result['total_surface_area_m2'] = round(
+                    total_area, 1
                 )
+                result['geojson_features'] = features
+                result['model_used'] = 'yolov8-solar-seg'
+                print(f"YOLO found {len(features)} panels")
             else:
-                result = _color_fallback(result, img, metadata)
-
+                print("YOLO found nothing, using fallback")
+                result = _color_fallback(
+                    result, img, lat, lng, used_zoom
+                )
+                
         except Exception as e:
-            print(f"YOLO inference failed: {e}")
-            result = _color_fallback(result, img, metadata)
+            print(f"YOLO failed: {e}")
+            result = _color_fallback(
+                result, img, lat, lng, used_zoom
+            )
     else:
-        result = _color_fallback(result, img, metadata)
-
+        print("No YOLO model, using color fallback")
+        result = _color_fallback(
+            result, img, lat, lng, used_zoom
+        )
+    
     return result
 
 
-def _color_fallback(result, composite_img, metadata):
-    """
-    Continuous contour color-based fallback when YOLO unavailable or finds 0 features.
-    """
-    img_array = np.array(composite_img)
-    r = img_array[:, :, 0].astype(float)
-    g = img_array[:, :, 1].astype(float)
-    b = img_array[:, :, 2].astype(float)
-
+def _color_fallback(result, img, lat, lng, zoom):
+    img_array = np.array(img)
+    r = img_array[:,:,0].astype(float)
+    g = img_array[:,:,1].astype(float)
+    b = img_array[:,:,2].astype(float)
+    
+    # Solar panels appear as uniform light-gray
+    # with slight blue tint in satellite imagery
+    # Key characteristics:
+    # - All channels similar (grayish)
+    # - Slightly blue-shifted
+    # - Not too bright (not clouds/roads)
+    # - Not too dark (not shadows)
+    
+    gray = (r + g + b) / 3
+    
     panel_mask = (
-        (b > r + 3) & (b > 30) & (b < 185) &
-        (r < 140) & (g < 140)
-    ) | (
-        (r < 75) & (g < 75) & (b < 75)
+        # Uniform gray (low variance between channels)
+        (np.abs(r - g) < 25) &
+        (np.abs(g - b) < 25) &
+        (np.abs(r - b) < 30) &
+        # Slight blue emphasis (panels)
+        (b >= r - 5) &
+        # Medium brightness (not too bright, not dark)
+        (gray > 60) &
+        (gray < 160) &
+        # Not pure white (roads/buildings)
+        (gray < 200)
     )
-
-    binary_mask = (panel_mask.astype(np.uint8)) * 255
-    if cv2 is not None:
-        kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (3, 3))
-        binary_mask = cv2.morphologyEx(binary_mask, cv2.MORPH_CLOSE, kernel)
-
+    
     h, w = img_array.shape[:2]
-    features, total_area = extract_geojson_features_from_mask(
-        binary_mask=binary_mask,
-        corner_extents=metadata["corner_extents"],
-        img_w=w,
-        img_h=h,
-        min_area_px=25
-    )
+    grid_size = 10
+    cell_h = h // grid_size
+    cell_w = w // grid_size
+    
+    features = []
+    total_area = 0
+    
+    for row in range(grid_size):
+        for col in range(grid_size):
+            cell = panel_mask[
+                row*cell_h:(row+1)*cell_h,
+                col*cell_w:(col+1)*cell_w
+            ]
+            coverage = cell.mean()
+            
+            if coverage > 0.30:
+                cx = (col + 0.5) * cell_w
+                cy = (row + 0.5) * cell_h
+                hw = cell_w * 0.48
+                hh = cell_h * 0.48
+                
+                corners = [
+                    [cx-hw, cy-hh],
+                    [cx+hw, cy-hh],
+                    [cx+hw, cy+hh],
+                    [cx-hw, cy+hh]
+                ]
+                
+                coords = pixels_to_latlng(
+                    corners, lat, lng, zoom,
+                    img_w=w, img_h=h
+                )
+                if coords:
+                    coords.append(coords[0])
+                
+                area = calculate_area(
+                    np.array(corners), zoom, lat,
+                    img_w=w
+                )
+                total_area += area
+                
+                features.append({
+                    'type': 'Feature',
+                    'geometry': {
+                        'type': 'Polygon',
+                        'coordinates': [coords]
+                    },
+                    'properties': {
+                        'type': 'solar_panel_array',
+                        'area_m2': round(area, 1),
+                        'confidence': float(coverage),
+                        'detection_method': 'color'
+                    }
+                })
+    
+    result['panel_count'] = len(features)
+    result['total_surface_area_m2'] = round(total_area, 1)
+    result['geojson_features'] = features
+    result['model_used'] = 'color-spectral-fallback'
+    print(f"Color fallback found {len(features)} zones")
 
-    # If no yolo annotated image exists yet, save fallback visualization
+    # Save fallback annotated image for /debug-yolo
     try:
         debug_path = os.path.join(
             os.path.dirname(__file__),
             '..', 'data', 'yolo_annotated.jpg'
         )
-        if not os.path.exists(debug_path) and cv2 is not None:
-            contours, _ = cv2.findContours(binary_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-            vis_img = np.array(composite_img).copy()
-            cv2.drawContours(vis_img, contours, -1, (0, 255, 0), 2)
-            os.makedirs(os.path.dirname(debug_path), exist_ok=True)
-            Image.fromarray(vis_img).save(debug_path)
-            print(f"Saved fallback annotated image to {debug_path}")
+        os.makedirs(os.path.dirname(debug_path), exist_ok=True)
+        vis_img = img_array.copy()
+        if cv2 is not None:
+            for row in range(grid_size):
+                for col in range(grid_size):
+                    cell = panel_mask[row*cell_h:(row+1)*cell_h, col*cell_w:(col+1)*cell_w]
+                    if cell.mean() > 0.30:
+                        cv2.rectangle(
+                            vis_img,
+                            (int(col*cell_w), int(row*cell_h)),
+                            (int((col+1)*cell_w), int((row+1)*cell_h)),
+                            (0, 255, 0), 2
+                        )
+        Image.fromarray(vis_img).save(debug_path)
+        print(f"Saved fallback annotated image to {debug_path}")
     except Exception as e:
-        print(f"Fallback annotated save failed: {e}")
+        print(f"Fallback debug image save error: {e}")
 
-    result["panel_count"] = len(features)
-    result["total_surface_area_m2"] = round(total_area, 1)
-    result["geojson_features"] = features
-    result["model_used"] = "color-fallback"
     return result
