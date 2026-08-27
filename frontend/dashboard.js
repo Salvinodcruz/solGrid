@@ -9,15 +9,15 @@ const BUILDINGS = [
     id: "SF001",
     label: "Agua Caliente Solar Project",
     address: "Yuma County, Arizona",
-    coordinates: [-113.5000, 32.9667],
+    coordinates: [-113.5100, 32.9665],
     array_bounds: {
       type: "Polygon",
       coordinates: [[
-        [-113.5250, 32.9500],
-        [-113.4750, 32.9500],
-        [-113.4750, 32.9833],
-        [-113.5250, 32.9833],
-        [-113.5250, 32.9500]
+        [-113.5420, 32.9420],
+        [-113.4780, 32.9420],
+        [-113.4780, 32.9910],
+        [-113.5420, 32.9910],
+        [-113.5420, 32.9420]
       ]]
     },
     panel_area_m2: 2400000,
@@ -36,15 +36,15 @@ const BUILDINGS = [
     id: "SF002", 
     label: "Solana Generating Station",
     address: "Gila Bend, Arizona",
-    coordinates: [-112.9670, 32.9170],
+    coordinates: [-112.9570, 32.9180],
     array_bounds: {
       type: "Polygon",
       coordinates: [[
-        [-112.9880, 32.9020],
-        [-112.9460, 32.9020],
-        [-112.9460, 32.9320],
-        [-112.9880, 32.9320],
-        [-112.9880, 32.9020]
+        [-112.9820, 32.8980],
+        [-112.9320, 32.8980],
+        [-112.9320, 32.9380],
+        [-112.9820, 32.9380],
+        [-112.9820, 32.8980]
       ]]
     },
     panel_area_m2: 1920000,
@@ -63,15 +63,15 @@ const BUILDINGS = [
     id: "SF003",
     label: "Arlington Valley Solar Energy",
     address: "Arlington, Arizona",
-    coordinates: [-112.9000, 33.3500],
+    coordinates: [-112.8950, 33.3500],
     array_bounds: {
       type: "Polygon",
       coordinates: [[
-        [-112.9180, 33.3360],
-        [-112.8820, 33.3360],
-        [-112.8820, 33.3640],
-        [-112.9180, 33.3640],
-        [-112.9180, 33.3360]
+        [-112.9180, 33.3280],
+        [-112.8720, 33.3280],
+        [-112.8720, 33.3720],
+        [-112.9180, 33.3720],
+        [-112.9180, 33.3280]
       ]]
     },
     panel_area_m2: 1150000,
@@ -94,11 +94,11 @@ const BUILDINGS = [
     array_bounds: {
       type: "Polygon",
       coordinates: [[
-        [-111.8340, 32.7380],
-        [-111.8060, 32.7380],
-        [-111.8060, 32.7620],
-        [-111.8340, 32.7620],
-        [-111.8340, 32.7380]
+        [-111.8480, 32.7320],
+        [-111.7920, 32.7320],
+        [-111.7920, 32.7680],
+        [-111.8480, 32.7680],
+        [-111.8480, 32.7320]
       ]]
     },
     panel_area_m2: 680000,
@@ -117,15 +117,15 @@ const BUILDINGS = [
     id: "SF005",
     label: "Hyder Solar Project",
     address: "Hyder, Arizona",
-    coordinates: [-113.9000, 32.9800],
+    coordinates: [-113.8950, 32.9850],
     array_bounds: {
       type: "Polygon",
       coordinates: [[
-        [-113.9240, 32.9640],
-        [-113.8760, 32.9640],
-        [-113.8760, 32.9960],
-        [-113.9240, 32.9960],
-        [-113.9240, 32.9640]
+        [-113.9180, 32.9620],
+        [-113.8720, 32.9620],
+        [-113.8720, 33.0080],
+        [-113.9180, 33.0080],
+        [-113.9180, 32.9620]
       ]]
     },
     panel_area_m2: 1650000,
@@ -147,51 +147,51 @@ const FARM_BOUNDARIES = {
   'SF001': {
     name: 'Agua Caliente Solar Project',
     polygon: [
-      [-113.5580, 32.9380],
-      [-113.4680, 32.9380],
-      [-113.4680, 32.9950],
-      [-113.5580, 32.9950],
-      [-113.5580, 32.9380]
+      [-113.5420, 32.9420],
+      [-113.4780, 32.9420],
+      [-113.4780, 32.9910],
+      [-113.5420, 32.9910],
+      [-113.5420, 32.9420]
     ]
   },
   'SF002': {
     name: 'Solana Generating Station',
     polygon: [
-      [-113.0050, 32.8950],
-      [-112.9280, 32.8950],
-      [-112.9280, 32.9480],
-      [-113.0050, 32.9480],
-      [-113.0050, 32.8950]
+      [-112.9820, 32.8980],
+      [-112.9320, 32.8980],
+      [-112.9320, 32.9380],
+      [-112.9820, 32.9380],
+      [-112.9820, 32.8980]
     ]
   },
   'SF003': {
-    name: 'Arlington Valley Solar',
+    name: 'Arlington Valley Solar Energy',
     polygon: [
-      [-112.9380, 33.3180],
-      [-112.8620, 33.3180],
-      [-112.8620, 33.3820],
-      [-112.9380, 33.3820],
-      [-112.9380, 33.3180]
+      [-112.9180, 33.3280],
+      [-112.8720, 33.3280],
+      [-112.8720, 33.3720],
+      [-112.9180, 33.3720],
+      [-112.9180, 33.3280]
     ]
   },
   'SF004': {
     name: 'Red Rock Solar Project',
     polygon: [
-      [-111.8580, 32.7280],
-      [-111.7820, 32.7280],
-      [-111.7820, 32.7720],
-      [-111.8580, 32.7720],
-      [-111.8580, 32.7280]
+      [-111.8480, 32.7320],
+      [-111.7920, 32.7320],
+      [-111.7920, 32.7680],
+      [-111.8480, 32.7680],
+      [-111.8480, 32.7320]
     ]
   },
   'SF005': {
     name: 'Hyder Solar Project',
     polygon: [
-      [-113.9380, 32.9580],
-      [-113.8620, 32.9580],
-      [-113.8620, 33.0120],
-      [-113.9380, 33.0120],
-      [-113.9380, 32.9580]
+      [-113.9180, 32.9620],
+      [-113.8720, 32.9620],
+      [-113.8720, 33.0080],
+      [-113.9180, 33.0080],
+      [-113.9180, 32.9620]
     ]
   }
 };
@@ -1246,14 +1246,17 @@ function addThermalGradientInside(building, metrics) {
   if (!boundary) return;
   
   const risk = (metrics && metrics.risk_score !== undefined) ? metrics.risk_score : (building.risk || 70);
-  const centerLon = building.coordinates[0];
-  const centerLat = building.coordinates[1];
-  
   const poly = boundary.polygon;
   const lons = poly.map(p => p[0]);
   const lats = poly.map(p => p[1]);
-  const width = Math.max(...lons) - Math.min(...lons);
-  const height = Math.max(...lats) - Math.min(...lats);
+  const minLon = Math.min(...lons);
+  const maxLon = Math.max(...lons);
+  const minLat = Math.min(...lats);
+  const maxLat = Math.max(...lats);
+  const centerLon = (minLon + maxLon) / 2;
+  const centerLat = (minLat + maxLat) / 2;
+  const width = maxLon - minLon;
+  const height = maxLat - minLat;
   
   const zones = [
     { scale: 1.0, opacity: 0.35, riskMod: 0 },
@@ -1321,6 +1324,16 @@ function addThermalGradientInside(building, metrics) {
         ),
         'fill-opacity': 1
       }
+    });
+
+    map.on('click', zoneId, () => {
+      analyzeBuilding(building);
+    });
+    map.on('mouseenter', zoneId, () => {
+      map.getCanvas().style.cursor = 'pointer';
+    });
+    map.on('mouseleave', zoneId, () => {
+      map.getCanvas().style.cursor = '';
     });
   });
   
