@@ -16,7 +16,13 @@ from PIL import Image
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 sys.path.insert(0, 'C:/Users/jjdcr/Desktop/VS_code/temperature-api-quickstart')
-from fortyguard import FortyGuardClient
+try:
+    from fortyguard import FortyGuardClient
+    FORTYGUARD_CLIENT_AVAILABLE = True
+except ImportError:
+    FortyGuardClient = None
+    FORTYGUARD_CLIENT_AVAILABLE = False
+    print("FortyGuard client not available - using direct API calls")
 
 from backend.solGrid_engine import (
     ARIZONA_SOLAR_FARMS,
@@ -502,42 +508,85 @@ def get_heatmap_tiles():
             }]
         }
         
-        client = FortyGuardClient()
         today = date.today().strftime('%Y-%m-%d')
-        
         formatted = []
-        try:
-            response = client.create_heatmap(
-                polygon_aoi=polygon_aoi,
-                start_date=today,
-                start_time='14:00',
-                filter_type=1,
-                granularity=100,
-                timeout=4.0,
-                verbose=False
-            )
-            
-            tiles = response.get('result', {}).get(
-                'map_data', {}).get('features', [])
-            
-            for tile in tiles:
-                props = tile.get('properties', {})
-                geom = tile.get('geometry', {})
-                coords = geom.get('coordinates', [[]])[0]
+        
+        if FORTYGUARD_CLIENT_AVAILABLE:
+            try:
+                client = FortyGuardClient()
+                response = client.create_heatmap(
+                    polygon_aoi=polygon_aoi,
+                    start_date=today,
+                    start_time='14:00',
+                    filter_type=1,
+                    granularity=100,
+                    timeout=4.0,
+                    verbose=False
+                )
                 
-                if coords:
-                    center_lon = float(sum(c[0] for c in coords)/len(coords))
-                    center_lat = float(sum(c[1] for c in coords)/len(coords))
-                    temp = float(props.get('average_temperature') if props.get('average_temperature') is not None else props.get('temperature', 0))
-                    formatted.append({
-                        'lon': center_lon,
-                        'lat': center_lat,
-                        'temp': temp,
-                        'min_temp': float(props.get('min_temperature', temp)),
-                        'max_temp': float(props.get('max_temperature', temp))
-                    })
-        except Exception:
-            pass
+                tiles = response.get('result', {}).get(
+                    'map_data', {}).get('features', [])
+                
+                for tile in tiles:
+                    props = tile.get('properties', {})
+                    geom = tile.get('geometry', {})
+                    coords = geom.get('coordinates', [[]])[0]
+                    
+                    if coords:
+                        center_lon = float(sum(c[0] for c in coords)/len(coords))
+                        center_lat = float(sum(c[1] for c in coords)/len(coords))
+                        temp = float(props.get('average_temperature') if props.get('average_temperature') is not None else props.get('temperature', 0))
+                        formatted.append({
+                            'lon': center_lon,
+                            'lat': center_lat,
+                            'temp': temp,
+                            'min_temp': float(props.get('min_temperature', temp)),
+                            'max_temp': float(props.get('max_temperature', temp))
+                        })
+            except Exception:
+                pass
+        else:
+            # Fallback: direct HTTP requests to FortyGuard API
+            try:
+                api_key = os.getenv('FORTYGUARD_API_KEY')
+                if api_key:
+                    url = "https://api.fortyguard.com/v1/heatmap"
+                    payload = {
+                        "polygon_aoi": polygon_aoi,
+                        "date_time": {
+                            "start_date": today,
+                            "filter_type": 1,
+                            "start_time": "14:00"
+                        },
+                        "granularity": 100,
+                        "analytic_type": "tcm"
+                    }
+                    resp = requests.post(
+                        url,
+                        json=payload,
+                        headers={"api-key": api_key, "Content-Type": "application/json"},
+                        timeout=4.0
+                    )
+                    if resp.ok:
+                        data_res = resp.json()
+                        tiles = data_res.get('result', {}).get('map_data', {}).get('features', [])
+                        for tile in tiles:
+                            props = tile.get('properties', {})
+                            geom = tile.get('geometry', {})
+                            coords = geom.get('coordinates', [[]])[0]
+                            if coords:
+                                center_lon = float(sum(c[0] for c in coords)/len(coords))
+                                center_lat = float(sum(c[1] for c in coords)/len(coords))
+                                temp = float(props.get('average_temperature') if props.get('average_temperature') is not None else props.get('temperature', 0))
+                                formatted.append({
+                                    'lon': center_lon,
+                                    'lat': center_lat,
+                                    'temp': temp,
+                                    'min_temp': float(props.get('min_temperature', temp)),
+                                    'max_temp': float(props.get('max_temperature', temp))
+                                })
+            except Exception:
+                pass
 
         # If live API returned 0 tiles or timed out for remote desert coordinates, compute FortyGuard thermal grid
         if not formatted:
