@@ -13,11 +13,11 @@ const BUILDINGS = [
     array_bounds: {
       type: "Polygon",
       coordinates: [[
-        [-113.5420, 32.9420],
-        [-113.4780, 32.9420],
-        [-113.4780, 32.9910],
-        [-113.5420, 32.9910],
-        [-113.5420, 32.9420]
+        [-113.5280, 32.9520],
+        [-113.4880, 32.9520],
+        [-113.4880, 32.9820],
+        [-113.5280, 32.9820],
+        [-113.5280, 32.9520]
       ]]
     },
     panel_area_m2: 2400000,
@@ -40,11 +40,11 @@ const BUILDINGS = [
     array_bounds: {
       type: "Polygon",
       coordinates: [[
-        [-112.9820, 32.8980],
-        [-112.9320, 32.8980],
-        [-112.9320, 32.9380],
-        [-112.9820, 32.9380],
-        [-112.9820, 32.8980]
+        [-112.9720, 32.9020],
+        [-112.9380, 32.9020],
+        [-112.9380, 32.9320],
+        [-112.9720, 32.9320],
+        [-112.9720, 32.9020]
       ]]
     },
     panel_area_m2: 1920000,
@@ -67,11 +67,11 @@ const BUILDINGS = [
     array_bounds: {
       type: "Polygon",
       coordinates: [[
-        [-112.9450, 33.3180],
-        [-112.8450, 33.3180],
-        [-112.8450, 33.3820],
-        [-112.9450, 33.3820],
-        [-112.9450, 33.3180]
+        [-112.9280, 33.3320],
+        [-112.8680, 33.3320],
+        [-112.8680, 33.3720],
+        [-112.9280, 33.3720],
+        [-112.9280, 33.3320]
       ]]
     },
     panel_area_m2: 1150000,
@@ -94,11 +94,11 @@ const BUILDINGS = [
     array_bounds: {
       type: "Polygon",
       coordinates: [[
-        [-111.8480, 32.7320],
-        [-111.7920, 32.7320],
-        [-111.7920, 32.7680],
-        [-111.8480, 32.7680],
-        [-111.8480, 32.7320]
+        [-111.8420, 32.7380],
+        [-111.8020, 32.7380],
+        [-111.8020, 32.7620],
+        [-111.8420, 32.7620],
+        [-111.8420, 32.7380]
       ]]
     },
     panel_area_m2: 680000,
@@ -121,11 +121,11 @@ const BUILDINGS = [
     array_bounds: {
       type: "Polygon",
       coordinates: [[
-        [-113.9180, 32.9620],
-        [-113.8720, 32.9620],
-        [-113.8720, 33.0080],
-        [-113.9180, 33.0080],
-        [-113.9180, 32.9620]
+        [-113.9120, 32.9680],
+        [-113.8780, 32.9680],
+        [-113.8780, 33.0020],
+        [-113.9120, 33.0020],
+        [-113.9120, 32.9680]
       ]]
     },
     panel_area_m2: 1650000,
@@ -147,51 +147,51 @@ const FARM_BOUNDARIES = {
   'SF001': {
     name: 'Agua Caliente Solar Project',
     polygon: [
-      [-113.5420, 32.9420],
-      [-113.4780, 32.9420],
-      [-113.4780, 32.9910],
-      [-113.5420, 32.9910],
-      [-113.5420, 32.9420]
+      [-113.5280, 32.9520],
+      [-113.4880, 32.9520],
+      [-113.4880, 32.9820],
+      [-113.5280, 32.9820],
+      [-113.5280, 32.9520]
     ]
   },
   'SF002': {
     name: 'Solana Generating Station',
     polygon: [
-      [-112.9820, 32.8980],
-      [-112.9320, 32.8980],
-      [-112.9320, 32.9380],
-      [-112.9820, 32.9380],
-      [-112.9820, 32.8980]
+      [-112.9720, 32.9020],
+      [-112.9380, 32.9020],
+      [-112.9380, 32.9320],
+      [-112.9720, 32.9320],
+      [-112.9720, 32.9020]
     ]
   },
   'SF003': {
     name: 'Arlington Valley Solar Energy',
     polygon: [
-      [-112.9450, 33.3180],
-      [-112.8450, 33.3180],
-      [-112.8450, 33.3820],
-      [-112.9450, 33.3820],
-      [-112.9450, 33.3180]
+      [-112.9280, 33.3320],
+      [-112.8680, 33.3320],
+      [-112.8680, 33.3720],
+      [-112.9280, 33.3720],
+      [-112.9280, 33.3320]
     ]
   },
   'SF004': {
     name: 'Red Rock Solar Project',
     polygon: [
-      [-111.8480, 32.7320],
-      [-111.7920, 32.7320],
-      [-111.7920, 32.7680],
-      [-111.8480, 32.7680],
-      [-111.8480, 32.7320]
+      [-111.8420, 32.7380],
+      [-111.8020, 32.7380],
+      [-111.8020, 32.7620],
+      [-111.8420, 32.7620],
+      [-111.8420, 32.7380]
     ]
   },
   'SF005': {
     name: 'Hyder Solar Project',
     polygon: [
-      [-113.9180, 32.9620],
-      [-113.8720, 32.9620],
-      [-113.8720, 33.0080],
-      [-113.9180, 33.0080],
-      [-113.9180, 32.9620]
+      [-113.9120, 32.9680],
+      [-113.8780, 32.9680],
+      [-113.8780, 33.0020],
+      [-113.9120, 33.0020],
+      [-113.9120, 32.9680]
     ]
   }
 };
@@ -574,8 +574,26 @@ async function analyzeBuilding(building) {
     showFarmThermalOverlay(building, data);
     addThermalGradientInside(building, data);
 
-    // AI YOLOv8 Solar Panel Detection & Render
-    detectAndRenderPanels(building);
+    // Switch to satellite view
+    if (!satelliteMode) {
+      toggleSatellite();
+    }
+
+    // Wait for style to load then detect
+    if (map) {
+      map.once('style.load', () => {
+        setTimeout(() => {
+          detectAndRenderPanels(building);
+        }, 500);
+      });
+    }
+
+    // If already in satellite mode, detect immediately
+    if (satelliteMode) {
+      setTimeout(() => {
+        detectAndRenderPanels(building);
+      }, 1000);
+    }
   } catch (err) {
     console.error('Error analyzing building:', err);
   }
@@ -1352,6 +1370,12 @@ let lastDetectionData = null;
 
 function renderDetectionLayers(geojson) {
   if (!geojson || !map) return;
+
+  // Remove old layer if exists
+  ['solar-polygons-fill', 
+   'solar-polygons-outline'].forEach(id => {
+    if (map.getLayer(id)) map.removeLayer(id);
+  });
   if (map.getSource('solar-detections')) {
     map.getSource('solar-detections').setData(geojson);
   } else {
@@ -1359,25 +1383,30 @@ function renderDetectionLayers(geojson) {
       type: 'geojson',
       data: geojson
     });
+  }
 
+  if (!map.getLayer('solar-polygons-fill')) {
     map.addLayer({
       id: 'solar-polygons-fill',
       type: 'fill',
       source: 'solar-detections',
       paint: {
         'fill-color': '#f97316',
-        'fill-opacity': 0.35
+        'fill-opacity': 0.25
       }
     });
+  }
 
+  if (!map.getLayer('solar-polygons-outline')) {
     map.addLayer({
       id: 'solar-polygons-outline',
       type: 'line',
       source: 'solar-detections',
       paint: {
         'line-color': '#f97316',
-        'line-width': 1.5,
-        'line-opacity': 0.9
+        'line-width': 2,
+        'line-opacity': 0.9,
+        'line-dasharray': [3, 1]
       }
     });
   }
@@ -1446,7 +1475,45 @@ async function detectAndRenderPanels(building, autoSwitchSatellite = false) {
     lastDetectionGeoJSON = geojson;
     lastDetectionData = data;
 
-    renderDetectionLayers(geojson);
+    // Remove old layer if exists
+    ['solar-polygons-fill', 
+     'solar-polygons-outline'].forEach(id => {
+      if (map.getLayer(id)) map.removeLayer(id);
+    });
+    if (map.getSource('solar-detections')) {
+      map.getSource('solar-detections').setData(geojson);
+    } else {
+      map.addSource('solar-detections', {
+        type: 'geojson',
+        data: geojson
+      });
+    }
+
+    if (!map.getLayer('solar-polygons-fill')) {
+      map.addLayer({
+        id: 'solar-polygons-fill',
+        type: 'fill',
+        source: 'solar-detections',
+        paint: {
+          'fill-color': '#f97316',
+          'fill-opacity': 0.25
+        }
+      });
+    }
+
+    if (!map.getLayer('solar-polygons-outline')) {
+      map.addLayer({
+        id: 'solar-polygons-outline',
+        type: 'line',
+        source: 'solar-detections',
+        paint: {
+          'line-color': '#f97316',
+          'line-width': 2,
+          'line-opacity': 0.9,
+          'line-dasharray': [3, 1]
+        }
+      });
+    }
 
     const detectedArea = data.total_surface_area_m2;
     const panelCount = data.panel_count;
@@ -1482,12 +1549,6 @@ async function detectAndRenderPanels(building, autoSwitchSatellite = false) {
 
     const mapContainer = document.getElementById('map') || document.querySelector('.map-panel');
     if (mapContainer) mapContainer.appendChild(badge);
-
-    map.flyTo({
-      center: [lng, lat],
-      zoom: 12,
-      duration: 2000
-    });
 
   } catch(e) {
     console.error('Panel detection error:', e);
