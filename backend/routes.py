@@ -34,7 +34,7 @@ from config import CITY, STATE
 bp = Blueprint("api", __name__)
 engine = SolGridEngine()
 
-VERSION = "1.0.0"
+VERSION = "1.0.1"
 
 # Phoenix August profile, stands in until Prophet lands in Phase 3.
 FORECAST_DAYS = [
