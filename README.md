@@ -162,4 +162,72 @@ Open `http://localhost:8000`
 
 ---
 
+## FortyGuard API Integration
+
+SolGrid uses the FortyGuard Environmental Parameters 
+API with an async submit-and-poll pattern.
+
+### API Authentication
+The API key is sent in the request header as:
+`api-key: YOUR_FORTYGUARD_API_KEY`
+NOT as a Bearer token.
+
+### Real API Request
+
+POST https://api.fortyguard.com/v1/environmental-parameters
+
+Headers:
+  api-key: YOUR_FORTYGUARD_API_KEY
+  Content-Type: application/json
+
+Body:
+  {
+    "lat": 32.9667,
+    "lon": -113.5000,
+    "date": "2026-08-18",
+    "start_time": "00:00",
+    "end_time": "23:00",
+    "filter_type": 2
+  }
+
+### Real API Response (Phoenix AZ, 2026-08-18)
+
+  {
+    "apparent_temperature_celsius": 46.1,
+    "heat_index_celsius": 43.0,
+    "wet_bulb_temperature_celsius": 22.1,
+    "relative_humidity_percent": 17.63,
+    "solar_clearsky": {
+      "ghi": 950.0,
+      "dni": 920.0,
+      "dhi": 120.0,
+      "avg_24h_ghi": 303.0
+    },
+    "hourly_timeseries": {
+      "apparent_temperature_celsius": [
+        35.9, 35.4, 35.1, 33.6, 32.7, 31.7,
+        31.5, 32.5, 34.1, 36.1, 38.4, 41.3,
+        43.7, 45.4, 46.1, 45.6, 44.6, 43.2,
+        42.1, 41.2, 39.9, 39.5, 39.1, 38.4
+      ],
+      "ghi": [
+        0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
+        76.0, 266.0, 513.0, 722.0, 855.0, 931.0,
+        950.0, 931.0, 874.0, 760.0, 589.0, 380.0,
+        171.0, 28.5, 0.0, 0.0, 0.0, 0.0
+      ]
+    }
+  }
+
+### How SolGrid processes this data
+
+1. Peak apparent_temperature (46.1C) becomes T_ambient
+2. Peak GHI (950 W/m2) is the irradiance input
+3. Faiman model: T_cell = 46.1 + ((45-20)/800) x 950 x 0.71 = 87C
+4. Efficiency loss = 0.004 x (87 - 25) = 24.8%
+5. At 290MW: $1.73M/month lost to heat
+
+---
+
 *Built by SonShield for the FortyGuard Hackathon 2026*
+
