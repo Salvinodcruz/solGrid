@@ -11,6 +11,22 @@ then tells operators exactly which intervention pays back fastest.
 
 ---
 
+## Important Note on Development Timeline
+
+The repository was created before the official 
+hackathon kickoff (Aug 18) for project scaffolding 
+and environment setup only. All core features were 
+built during the official sprint period (Aug 18-30):
+- FortyGuard live API integration
+- Faiman thermal model + XGBoost ML pipeline  
+- Groq AI Thermal Advisor
+- Interactive What-If simulator
+- Live deployment on Railway
+
+This is declared per hackathon requirements.
+
+---
+
 ## Live Demo
 
  **[Live dashboard →](https://solgrid-production.up.railway.app/)**  
@@ -228,5 +244,27 @@ Body:
 
 ---
 
+## Known Limitations
+
+- YOLO satellite panel detection uses color-based 
+  fallback on live deployment due to model size 
+  constraints on free hosting. Full YOLO inference 
+  available locally.
+- Platform currently demos 5 Arizona utility-scale 
+  solar farms. Production would integrate NREL 
+  Tracking the Sun database for full US coverage.
+- FortyGuard API covers US locations only.
+
+---
+
+## AI Tools Used
+
+- Claude (Anthropic) — code generation and debugging
+- Groq / Llama 3.1 — integrated as AI Thermal Advisor 
+  feature within the product
+
+---
+
 *Built by SonShield for the FortyGuard Hackathon 2026*
+
 
