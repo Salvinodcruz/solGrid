@@ -13,8 +13,7 @@ then tells operators exactly which intervention pays back fastest.
 
 ## Live Demo
 
-🔗 **[Live dashboard →](http://localhost:8000)**  
-*(Deploy link will be added before submission)*
+ **[Live dashboard →](https://solgrid-production.up.railway.app/)**  
 
 ---
 
